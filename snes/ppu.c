@@ -161,7 +161,7 @@ void ppu_reset(Ppu* ppu) {
   ppu->forcedBlank = true;
   ppu->brightness = 0;
   ppu->mode = 0;
-  ppu->bg3Priority = false;
+  ppu->bg3priority = false;
   ppu->evenFrame = false;
   ppu->pseudoHires = false;
   ppu->overscan = false;
@@ -174,6 +174,8 @@ void ppu_reset(Ppu* ppu) {
   ppu->hCountSecond = false;
   ppu->vCountSecond = false;
   ppu->countersLatched = false;
+  ppu->ppu1openBus = 0;
+  ppu->ppu2openBus = 0;
   memset(ppu->pixelBuffer, 0, sizeof(ppu->pixelBuffer));
 }
 
@@ -190,28 +192,26 @@ void ppu_handleVblank(Ppu* ppu) {
     ppu->oamInHigh = ppu->oamInHighWritten;
     ppu->oamSecondWrite = false;
   }
-  ppu->evenFrame = !ppu->evenFrame;
   ppu->frameInterlace = ppu->interlace; // set if we have a interlaced frame
 }
 
 void ppu_runLine(Ppu* ppu, int line) {
   if(line == 0) {
-    // pre-render line, evaluate sprites at y=0 for line 1
+    // pre-render line
     // TODO: this now happens halfway into the first line
-    memset(ppu->objPixelBuffer, 0, sizeof(ppu->objPixelBuffer));
-    if(!ppu->forcedBlank) ppu_evaluateSprites(ppu, 0);
     ppu->mosaicStartLine = 1;
     ppu->rangeOver = false;
     ppu->timeOver = false;
+    ppu->evenFrame = !ppu->evenFrame;
   } else {
+    // evaluate sprites
+    memset(ppu->objPixelBuffer, 0, sizeof(ppu->objPixelBuffer));
+    if(!ppu->forcedBlank) ppu_evaluateSprites(ppu, line - 1);
     // actual line
     if(ppu->mode == 7) ppu_calculateMode7Starts(ppu, line);
     for(int x = 0; x < 256; x++) {
       ppu_handlePixel(ppu, x, line);
     }
-    // evaluate sprites
-    memset(ppu->objPixelBuffer, 0, sizeof(ppu->objPixelBuffer));
-    if(!ppu->forcedBlank) ppu_evaluateSprites(ppu, line);
   }
 }
 
@@ -280,7 +280,7 @@ static void ppu_handlePixel(Ppu* ppu, int x, int y) {
 static int ppu_getPixel(Ppu* ppu, int x, int y, bool sub, int* r, int* g, int* b) {
   // figure out which color is on this location on main- or subscreen, sets it in r, g, b
   // returns which layer it is: 0-3 for bg layer, 4 or 6 for sprites (depending on palette), 5 for backdrop
-  int actMode = ppu->mode == 1 && ppu->bg3Priority ? 8 : ppu->mode;
+  int actMode = ppu->mode == 1 && ppu->bg3priority ? 8 : ppu->mode;
   actMode = ppu->mode == 7 && ppu->m7extBg ? 9 : actMode;
   int layer = 5;
   int pixel = 0;
@@ -604,14 +604,22 @@ static uint16_t ppu_getVramRemap(Ppu* ppu) {
   return adr;
 }
 
-// TODO: handle ppu open bus (for ppu1 and ppu2; for read as well)
 uint8_t ppu_read(Ppu* ppu, uint8_t adr) {
   switch(adr) {
+    case 0x04: case 0x14: case 0x24:
+    case 0x05: case 0x15: case 0x25:
+    case 0x06: case 0x16: case 0x26:
+    case 0x08: case 0x18: case 0x28:
+    case 0x09: case 0x19: case 0x29:
+    case 0x0a: case 0x1a: case 0x2a: {
+      return ppu->ppu1openBus;
+    }
     case 0x34:
     case 0x35:
     case 0x36: {
       int result = ppu->m7matrix[0] * (ppu->m7matrix[1] >> 8);
-      return (result >> (8 * (adr - 0x34))) & 0xff;
+      ppu->ppu1openBus = (result >> (8 * (adr - 0x34))) & 0xff;
+      return ppu->ppu1openBus;
     }
     case 0x37: {
       // TODO: only when ppulatch is set
@@ -637,6 +645,7 @@ uint8_t ppu_read(Ppu* ppu, uint8_t adr) {
         }
       }
       ppu->oamSecondWrite = !ppu->oamSecondWrite;
+      ppu->ppu1openBus = ret;
       return ret;
     }
     case 0x39: {
@@ -645,6 +654,7 @@ uint8_t ppu_read(Ppu* ppu, uint8_t adr) {
         ppu->vramReadBuffer = ppu->vram[ppu_getVramRemap(ppu) & 0x7fff];
         ppu->vramPointer += ppu->vramIncrement;
       }
+      ppu->ppu1openBus = val & 0xff;
       return val & 0xff;
     }
     case 0x3a: {
@@ -653,6 +663,7 @@ uint8_t ppu_read(Ppu* ppu, uint8_t adr) {
         ppu->vramReadBuffer = ppu->vram[ppu_getVramRemap(ppu) & 0x7fff];
         ppu->vramPointer += ppu->vramIncrement;
       }
+      ppu->ppu1openBus = val >> 8;
       return val >> 8;
     }
     case 0x3b: {
@@ -660,44 +671,51 @@ uint8_t ppu_read(Ppu* ppu, uint8_t adr) {
       if(!ppu->cgramSecondWrite) {
         ret = ppu->cgram[ppu->cgramPointer] & 0xff;
       } else {
-        ret = ppu->cgram[ppu->cgramPointer++] >> 8;
+        ret = ((ppu->cgram[ppu->cgramPointer++] >> 8) & 0x7f) | (ppu->ppu2openBus & 0x80);
       }
       ppu->cgramSecondWrite = !ppu->cgramSecondWrite;
+      ppu->ppu2openBus = ret;
       return ret;
     }
     case 0x3c: {
       uint8_t val = 0;
       if(ppu->hCountSecond) {
-        val = ppu->hCount >> 8;
+        val = ((ppu->hCount >> 8) & 1) | (ppu->ppu2openBus & 0xfe);
       } else {
         val = ppu->hCount & 0xff;
       }
       ppu->hCountSecond = !ppu->hCountSecond;
+      ppu->ppu2openBus = val;
       return val;
     }
     case 0x3d: {
       uint8_t val = 0;
       if(ppu->vCountSecond) {
-        val = ppu->vCount >> 8;
+        val = ((ppu->vCount >> 8) & 1) | (ppu->ppu2openBus & 0xfe);
       } else {
         val = ppu->vCount & 0xff;
       }
       ppu->vCountSecond = !ppu->vCountSecond;
+      ppu->ppu2openBus = val;
       return val;
     }
     case 0x3e: {
       uint8_t val = 0x1; // ppu1 version (4 bit)
+      val |= ppu->ppu1openBus & 0x10;
       val |= ppu->rangeOver << 6;
       val |= ppu->timeOver << 7;
+      ppu->ppu1openBus = val;
       return val;
     }
     case 0x3f: {
       uint8_t val = 0x3; // ppu2 version (4 bit), bit 4: ntsc/pal
+      val |= ppu->ppu2openBus & 0x20;
       val |= ppu->countersLatched << 6;
       val |= ppu->evenFrame << 7;
       ppu->countersLatched = false; // TODO: only when ppulatch is set
       ppu->hCountSecond = false;
       ppu->vCountSecond = false;
+      ppu->ppu2openBus = val;
       return val;
     }
     default: {
@@ -755,7 +773,7 @@ void ppu_write(Ppu* ppu, uint8_t adr, uint8_t val) {
     }
     case 0x05: {
       ppu->mode = val & 0x7;
-      ppu->bg3Priority = val & 0x8;
+      ppu->bg3priority = val & 0x8;
       ppu->bgLayer[0].bigTiles = val & 0x10;
       ppu->bgLayer[1].bigTiles = val & 0x20;
       ppu->bgLayer[2].bigTiles = val & 0x40;
@@ -995,12 +1013,11 @@ void ppu_write(Ppu* ppu, uint8_t adr, uint8_t val) {
 }
 
 void ppu_putPixels(Ppu* ppu, uint8_t* pixels) {
-  // evenFrame has switched now, so evenFrame=false means the even frame
   for(int y = 0; y < (ppu->frameOverscan ? 239 : 224); y++) {
     int dest = y * 2 + (ppu->frameOverscan ? 2 : 16);
     int y1 = y, y2 = y + 239;
     if(!ppu->frameInterlace) {
-      y1 = y + (ppu->evenFrame ? 239 : 0);
+      y1 = y + (ppu->evenFrame ? 0 : 239);
       y2 = y1;
     }
     memcpy(pixels + (dest * 2048), &ppu->pixelBuffer[y1 * 2048], 2048);

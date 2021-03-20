@@ -66,4 +66,4 @@ Quite a few TODO's are scattered throughout the code for things that are current
 
 Some things that are not emulated at all are full emulation-mode for the 65816, and the test-register ($f0) for the SPC.
 
-Most games that I have tested seem to run without obvious issues, although a few games do seem to glitch somewhat.
+Some games that I have tested seem to run without obvious issues, although quite a few games do seem to glitch somewhat or freeze.

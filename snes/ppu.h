@@ -110,7 +110,7 @@ struct Ppu {
   bool forcedBlank;
   uint8_t brightness;
   uint8_t mode;
-  bool bg3Priority;
+  bool bg3priority;
   bool evenFrame;
   bool pseudoHires;
   bool overscan;
@@ -124,6 +124,8 @@ struct Ppu {
   bool hCountSecond;
   bool vCountSecond;
   bool countersLatched;
+  uint8_t ppu1openBus;
+  uint8_t ppu2openBus;
   // pixel buffer (xbgr)
   // times 2 for even and odd frame
   uint8_t pixelBuffer[512 * 4 * 239 * 2];
