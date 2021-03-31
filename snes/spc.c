@@ -1310,7 +1310,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     case 0xca: { // mov1s abs.bit
       uint16_t adr = 0;
       uint8_t bit = spc_adrAbsBit(spc, &adr);
-      uint8_t result = (spc_read(spc, adr) & (~1 << bit)) | (spc->c << bit);
+      uint8_t result = (spc_read(spc, adr) & (~(1 << bit))) | (spc->c << bit);
       spc_write(spc, adr, result);
       break;
     }

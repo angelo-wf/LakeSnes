@@ -58,7 +58,7 @@ Save states are not supported yet, but are planned.
 ## Compatibility
 
 The emulator currently only supports regular LoROM and HiROM games (no co-processors and such).
-Battery saves are not retained yet.
+Battery saves are not retained yet. SPC files can also not be loaded yet.
 
 This emulator is definitely not fully accurate. The CPU and SPC are both opcode-based and the 'execute all at once, then stall the correct amount of cycles'-pattern is used a lot. The PPU renders per scanline, so mid-scanline effects are not supported. The DSP executes on a per-sample basis.
 
@@ -66,4 +66,4 @@ Quite a few TODO's are scattered throughout the code for things that are current
 
 Some things that are not emulated at all are full emulation-mode for the 65816, and the test-register ($f0) for the SPC.
 
-Some games that I have tested seem to run without obvious issues, although quite a few games do seem to glitch somewhat or freeze.
+Some games that I have tested seem to run without obvious issues, although quite a few games do seem to glitch somewhat or freeze. `bugs.md` contains a non-exhaustive list of games with that have emulation-bugs.

@@ -213,7 +213,7 @@ static void readHeader(uint8_t* data, int location, CartHeader* header) {
     score += 3;
   }
   if(opcode == 0x00 || opcode == 0xff || opcode == 0xdb) {
-    // brk, sbc abx, stp
+    // brk, sbc alx, stp
     score -= 6;
   }
   header->score = score;
