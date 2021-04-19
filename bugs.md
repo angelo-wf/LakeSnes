@@ -26,7 +26,7 @@ Generally, at least the following general issues seem at play:
   - Some sound effects sound off, and start mixing into the music
   - Clearing of text and such is too slow, some other odd glitches
 - Alien vs Predator
-  - Flashes black every other frame in game
+  - Flashes black every other frame in-game
 - Battle Blaze
   - Title on title screen is scrolled wrong for a frame every so often (more often after menu shows up)
 - Battle Grand Prix
@@ -35,6 +35,8 @@ Generally, at least the following general issues seem at play:
   - Sound effects sound off (not released properly?)
 - Cybernator
   - Sound effects sound off (not released properly?)
+- Death Brade
+  - Match ends instantly
 - Dekikate high school
   - Windowing on title screen is entirely wrong
   - Menu after title screen is mostly invisible (windowing as well?)
@@ -57,6 +59,8 @@ Generally, at least the following general issues seem at play:
   - Intros have incorrect colours and glitchy text
 - Jumbo Ozaki no Hole in One
   - Weird colour-gradients during course preview
+- King of Dragons
+  - Music on title screen sounds wrong
 - Krusty's Super Fun House
   - Freezes on boot (CPU's execution ends up off the rails)
 - Mecarobot Golf
@@ -70,10 +74,13 @@ Generally, at least the following general issues seem at play:
 - Jurassic Park 2
   - Title screen palette seems to be slowly overwritten
   - Music sounds off (wrong samples) [does not happen in SnesJS]
+- Power Drive
+  - Broken graphics on name select screen
+  - Cannot move once in-game (?)
 - Rendering Ranger R2
   - Freezes on boot (stuck in SPC upload)
 - Robocop versus the Terminator
-  - Flashes black every other frame in game
+  - Flashes black every other frame in-game
 - Sink or Swim
   - Water works incorrectly (fills the screen, breaks scrolling)
   - Music sounds off, sound effects are missing
@@ -83,11 +90,11 @@ Generally, at least the following general issues seem at play:
   - Scroll is not updated correctly at the end of stage 1 when scrolling to the boss-area
 - Super Bomberman
   - Options on title-screen have sprite-dropout(?)
-- Tales of Phantasia
-  - Freezes on boot (CPU gets stuck in some loop)
 - Taz-Mania
   - Audio breaks during gameplay (might cause game freeze at following SPC upload)
 - Toy Story
   - Scroll is not updated correctly during the two chase levels ("Run Rex, run" and "Roller Bob")
   - Sprite-dropout problems in "Really inside the claw machine" when holding an alien (and some other places) [does not happen in SnesJS]
   - Odd noise when starting a new level, some sound effects keep going during and when exiting levels [does not happen in SnesJS]
+- Wild Guns
+  - Flashes to incorrect scroll every other frame in-game
