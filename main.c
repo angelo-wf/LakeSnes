@@ -14,7 +14,7 @@
 
 /* depends on behaviour:
 casting uintX_t to/from intX_t does 'expceted' unsigned<->signed conversion
-  ((int8_t) 255 == -1)
+  ((int8_t) 255) == -1
 same with assignment
   int8_t a; a = 0xff; a == -1
 overflow is handled as expected
@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
     printf("Failed to init SDL: %s\n", SDL_GetError());
     return 1;
   }
-  SDL_Window* window = SDL_CreateWindow("ElzSnes", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 512, 480, 0);
+  SDL_Window* window = SDL_CreateWindow("LakeSnes", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 512, 480, 0);
   if(window == NULL) {
     printf("Failed to create window: %s\n", SDL_GetError());
     return 1;

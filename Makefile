@@ -1,9 +1,10 @@
 
 CC = clang
 # CFLAGS = -O0 -g -framework SDL2 -F /library/Frameworks/ -I ./snes -I ./zip
-CFLAGS = -O3 -flto -g -framework SDL2 -F /library/Frameworks/ -I ./snes -I ./zip
+CFLAGS = -O3 -g -framework SDL2 -F /library/Frameworks/ -I ./snes -I ./zip
+# CFLAGS = -O3 -flto -g -framework SDL2 -F /library/Frameworks/ -I ./snes -I ./zip
 
-execname = elzsnes
+execname = lakesnes
 
 cfiles = snes/spc.c snes/dsp.c snes/apu.c snes/cpu.c snes/dma.c snes/ppu.c snes/cart.c snes/input.c snes/snes.c snes/snes_other.c \
  zip/zip.c tracing.c main.c

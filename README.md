@@ -1,4 +1,4 @@
-# ElzSnes
+# LakeSnes
 A SNES emulator, in C
 
 ## About
@@ -8,6 +8,8 @@ This is a SNES emulator, written in C, mostly as a followup on my [earlier Javas
 The intent is for it to be formed as a library, which could then be used in other projects. (Maybe it could be compiled for the web with Emscripten as well, to replace the core from that JS emulator).
 
 Performance, although much better than my JS version, is still quite bad though, especially when compared to emulators like BSNES or SNES9X (it uses around 80% of one core, whereas SNES9X only uses around 15%).
+
+Note that this was known as 'ElzSnes' for a little while before being renamed to LakeSnes.
 
 ## Compiling
 
@@ -19,7 +21,7 @@ Compiling on Windows will most likely require something like Cygwin/Mingw, or WS
 
 ## Usage and controls
 
-The emulator can be run with `./elzsnes` and takes an optional path to a ROM-file to open. ROM-files can also be dragged on the emulator window to open them. ZIP-files also work, the first file within with a `.smc` or `.sfc` will be loaded (zip support uses [this](https://github.com/kuba--/zip) zip-library, which uses Miniz, both under the Unlicence).
+The emulator can be run with `./lakesnes` and takes an optional path to a ROM-file to open. ROM-files can also be dragged on the emulator window to open them. ZIP-files also work, the first file within with a `.smc` or `.sfc` will be loaded (zip support uses [this](https://github.com/kuba--/zip) zip-library, which uses Miniz, both under the Unlicence).
 
 Currently, only normal joypads are supported, and only controller 1 has controls set up.
 
@@ -67,3 +69,7 @@ Quite a few TODO's are scattered throughout the code for things that are current
 Some things that are not emulated at all are full emulation-mode for the 65816, and the test-register ($f0) for the SPC.
 
 Some games that I have tested seem to run without obvious issues, although quite a few games do seem to glitch somewhat or freeze. `bugs.md` contains a non-exhaustive list of games with that have emulation-bugs.
+
+## License
+
+This project is licensed under the MIT license. See 'LICENSE.txt' for details.
