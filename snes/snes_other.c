@@ -38,9 +38,9 @@ typedef struct CartHeader {
   uint8_t cartType; // calculated type
 } CartHeader;
 
-static void readHeader(uint8_t* data, int location, CartHeader* header);
+static void readHeader(const uint8_t* data, int length, int location, CartHeader* header);
 
-bool snes_loadRom(Snes* snes, uint8_t* data, int length) {
+bool snes_loadRom(Snes* snes, const uint8_t* data, int length) {
   // if smaller than smallest possible, don't load
   if(length < 0x8000) {
     printf("Failed to load rom: rom to small (%d bytes)\n", length);
@@ -52,10 +52,10 @@ bool snes_loadRom(Snes* snes, uint8_t* data, int length) {
   for(int i = 0; i < 4; i++) {
     headers[i].score = -50;
   }
-  if(length >= 0x8000) readHeader(data, 0x7fc0, &headers[0]);
-  if(length >= 0x8200) readHeader(data, 0x81c0, &headers[1]);
-  if(length >= 0x10000) readHeader(data, 0xffc0, &headers[2]);
-  if(length >= 0x10200) readHeader(data, 0x101c0, &headers[3]);
+  if(length >= 0x8000) readHeader(data, length, 0x7fc0, &headers[0]);
+  if(length >= 0x8200) readHeader(data, length, 0x81c0, &headers[1]);
+  if(length >= 0x10000) readHeader(data, length, 0xffc0, &headers[2]);
+  if(length >= 0x10200) readHeader(data, length, 0x101c0, &headers[3]);
   // see which it is
   int max = 0;
   int used = 0;
@@ -132,7 +132,7 @@ void snes_setSamples(Snes* snes, int16_t* sampleData, int samplesPerFrame) {
   dsp_getSamples(snes->apu->dsp, sampleData, samplesPerFrame);
 }
 
-static void readHeader(uint8_t* data, int location, CartHeader* header) {
+static void readHeader(const uint8_t* data, int length, int location, CartHeader* header) {
   // read name, TODO: non-ASCII names?
   for(int i = 0; i < 21; i++) {
     uint8_t ch = data[location + i];
@@ -203,7 +203,13 @@ static void readHeader(uint8_t* data, int location, CartHeader* header) {
   uint16_t resetVector = data[location + 0x3c] | (data[location + 0x3d] << 8);
   score += (resetVector >= 0x8000) ? 8 : -20;
   // check first opcode after reset
-  uint8_t opcode = data[location + 0x40 - 0x8000 + (resetVector & 0x7fff)];
+  int opcodeLoc = location + 0x40 - 0x8000 + (resetVector & 0x7fff);
+  uint8_t opcode = 0xff;
+  if(opcodeLoc < length) {
+    opcode = data[opcodeLoc];
+  } else {
+    score -= 14;
+  }
   if(opcode == 0x78 || opcode == 0x18) {
     // sei, clc (for clc:xce)
     score += 6;

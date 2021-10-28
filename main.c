@@ -30,8 +30,8 @@ shifting into sign bit makes value negative
   int a = ((int16_t) (0x1fff << 3)) >> 3; a == -1
 */
 
-static uint8_t* readFile(char* name, size_t* length);
-static bool loadRom(char* name, Snes* snes);
+static uint8_t* readFile(const char* name, size_t* length);
+static bool loadRom(const char* name, Snes* snes);
 static bool checkExtention(const char* name, bool forZip);
 static void playAudio(Snes* snes, SDL_AudioDeviceID device, int16_t* audioBuffer);
 static void renderScreen(Snes* snes, SDL_Renderer* renderer, SDL_Texture* texture);
@@ -239,7 +239,7 @@ static bool checkExtention(const char* name, bool forZip) {
   return false;
 }
 
-static bool loadRom(char* name, Snes* snes) {
+static bool loadRom(const char* name, Snes* snes) {
   // zip library from https://github.com/kuba--/zip
   size_t length = 0;
   uint8_t* file = NULL;
@@ -271,7 +271,7 @@ static bool loadRom(char* name, Snes* snes) {
   return result;
 }
 
-static uint8_t* readFile(char* name, size_t* length) {
+static uint8_t* readFile(const char* name, size_t* length) {
   FILE* f = fopen(name, "rb");
   if(f == NULL) {
     return NULL;

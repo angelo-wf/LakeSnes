@@ -77,7 +77,7 @@ void snes_debugCycle(Snes* snes, bool* cpuNext, bool* spcNext);
 
 // snes_other.c functions:
 
-bool snes_loadRom(Snes* snes, uint8_t* data, int length);
+bool snes_loadRom(Snes* snes, const uint8_t* data, int length);
 void snes_setButtonState(Snes* snes, int player, int button, bool pressed);
 void snes_setPixels(Snes* snes, uint8_t* pixelData);
 void snes_setSamples(Snes* snes, int16_t* sampleData, int samplesPerFrame);
