@@ -13,7 +13,7 @@ Note that this was known as 'ElzSnes' for a little while before being renamed to
 
 ## Compiling
 
-The Makefile is currently set up for compiling on macOS, provided a copy of `SDL2.framework` is placed in the `sdl2` directory (can be downloaded from the main SDL2 site) and clang & make are available. With that in place, simply run `make`.
+The Makefile is currently set up for compiling on macOS, provided a copy of `SDL2.framework` is placed in a `sdl2` directory (can be downloaded from the main SDL2 site) and clang & make are available. With that in place, simply run `make`.
 
 Compiling on Linux will require SDL2 to be available, the Makefile to be modified for including SDL2 the correct way (lines 3 & 4) and possibly changing the `#include` that includes SDL2 in `main.c` (line 8). The used C compiler can also be changed, if needed (Makefile, line 2). Apart from SDL2, no other dependencies are used. After doing that, running `make` should (hopefully) work. Future intent is for this to be possible without needing to modify any files.
 
