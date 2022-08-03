@@ -1,8 +1,8 @@
 
 CC = clang
-# CFLAGS = -O0 -g -framework SDL2 -F . -I ./snes -I ./zip -rpath @executable_path
-CFLAGS = -O3 -g -framework SDL2 -F . -I ./snes -I ./zip -rpath @executable_path
-# CFLAGS = -O3 -flto -g -framework SDL2 -F . -I ./snes -I ./zip -rpath @executable_path
+# CFLAGS = -O0 -g -framework SDL2 -F sdl2 -I ./snes -I ./zip -rpath @executable_path/sdl2
+CFLAGS = -O3 -g -framework SDL2 -F sdl2 -I ./snes -I ./zip -rpath @executable_path/sdl2
+# CFLAGS = -O3 -flto -g -framework SDL2 -F sdl2 -I ./snes -I ./zip -rpath @executable_path/sdl2
 
 execname = lakesnes
 

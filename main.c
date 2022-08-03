@@ -81,6 +81,14 @@ int main(int argc, char** argv) {
   } else {
     puts("No rom loaded");
   }
+  // display stuff
+  SDL_DisplayMode mode;
+  SDL_GetDisplayMode(0, 0, &mode);
+  int refreshRate = mode.refresh_rate;
+  printf("Refresh rate: %dHz\n", refreshRate);
+  float adder = 60 / (float) refreshRate;
+  float addCol = 0.0;
+  int expectedMs = 1000 / refreshRate;
   // sdl loop
   bool running = true;
   bool paused = false;
@@ -94,6 +102,8 @@ int main(int argc, char** argv) {
   bool debugging = false;
   bool cpuNext = false;
   bool spcNext = false;
+  bool cpuPrint = true;
+  bool spcPrint = true;
   while(running) {
     while(SDL_PollEvent(&event)) {
       switch(event.type) {
@@ -106,6 +116,7 @@ int main(int argc, char** argv) {
             case SDLK_p: paused = !paused; break;
             case SDLK_t: turbo = true; break;
             case SDLK_j: {
+              puts("Dumping to dump.bin...");
               FILE* f = fopen("dump.bin", "wb");
               fwrite(snes->ram, 0x20000, 1, f);
               fwrite(snes->ppu->vram, 0x10000, 1, f);
@@ -116,6 +127,8 @@ int main(int argc, char** argv) {
               fclose(f);
               break;
             }
+            case SDLK_i: cpuPrint = !cpuPrint; break;
+            case SDLK_k: spcPrint = !spcPrint; break;
           }
           handleInput(snes, event.key.keysym.sym, true);
           break;
@@ -139,39 +152,44 @@ int main(int argc, char** argv) {
         }
       }
     }
-    if(loaded && (!paused || runOne)) {
-      runOne = false;
-      if(!debugging) {
-        if(turbo) {
+    addCol += adder;
+    if(addCol >= 1.0) {
+      addCol -= 1.0;
+      if(loaded && (!paused || runOne)) {
+        runOne = false;
+        if(!debugging) {
+          if(turbo) {
+            snes_runFrame(snes);
+          }
           snes_runFrame(snes);
-        }
-        snes_runFrame(snes);
-      } else {
-        for(int i = 0; i < 50; i++) {
-          snes_debugCycle(snes, &cpuNext, &spcNext);
-          if(cpuNext) {
-            char line[80];
-            getProcessorStateCpu(snes, line);
-            puts(line);
+        } else {
+          for(int i = 0; i < 50; i++) {
+            snes_debugCycle(snes, &cpuNext, &spcNext);
+            if(cpuNext && cpuPrint) {
+              char line[80];
+              getProcessorStateCpu(snes, line);
+              puts(line);
+            }
+            if(spcNext && spcPrint) {
+              char line[57];
+              getProcessorStateSpc(snes, line);
+              puts(line);
+            }
           }
-          if(spcNext) {
-            char line[57];
-            getProcessorStateSpc(snes, line);
-            puts(line);
-          }
         }
+        playAudio(snes, device, audioBuffer);
+        renderScreen(snes, renderer, texture);
       }
-      playAudio(snes, device, audioBuffer);
-      renderScreen(snes, renderer, texture);
     }
+    SDL_RenderCopy(renderer, texture, NULL, NULL);
     SDL_RenderPresent(renderer); // vsyncs to 60 FPS
     // if vsync isn't working, delay manually
     curTick = SDL_GetTicks();
     delta = curTick - lastTick;
-    lastTick = curTick;
-    if(delta < 16) {
-      SDL_Delay(16 - delta);
+    if(delta < expectedMs) {
+      SDL_Delay(expectedMs - delta);
     }
+    lastTick = curTick;
   }
   // clean snes
   snes_free(snes);
@@ -203,7 +221,6 @@ static void renderScreen(Snes* snes, SDL_Renderer* renderer, SDL_Texture* textur
   }
   snes_setPixels(snes, (uint8_t*) pixels);
   SDL_UnlockTexture(texture);
-  SDL_RenderCopy(renderer, texture, NULL, NULL);
 }
 
 static void handleInput(Snes* snes, int keyCode, bool pressed) {

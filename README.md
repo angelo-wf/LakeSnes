@@ -13,7 +13,7 @@ Note that this was known as 'ElzSnes' for a little while before being renamed to
 
 ## Compiling
 
-The Makefile is currently set up for compiling on macOS, provided a copy of `SDL2.framework` is placed in this directory (can be downloaded from the main SDL2 site) and clang & make are available. With that in place, simply run `make`.
+The Makefile is currently set up for compiling on macOS, provided a copy of `SDL2.framework` is placed in the `sdl2` directory (can be downloaded from the main SDL2 site) and clang & make are available. With that in place, simply run `make`.
 
 Compiling on Linux will require SDL2 to be available, the Makefile to be modified for including SDL2 the correct way (lines 3 & 4) and possibly changing the `#include` that includes SDL2 in `main.c` (line 8). The used C compiler can also be changed, if needed (Makefile, line 2). Apart from SDL2, no other dependencies are used. After doing that, running `make` should (hopefully) work. Future intent is for this to be possible without needing to modify any files.
 
@@ -42,17 +42,19 @@ Currently, only normal joypads are supported, and only controller 1 has controls
 
 Additionally, the following command are available:
 
-| Key | Action          |
-| --- | --------------- |
-| R   | Soft reset      |
-| E   | Hard reset      |
-| P   | Pause           |
-| O   | Frame advance   |
-| T   | Turbo           |
-| L   | Toggle log-mode |
-| J   | Dumps some data |
+| Key | Action             |
+| --- | ------------------ |
+| R   | Soft reset         |
+| E   | Hard reset         |
+| P   | Pause              |
+| O   | Frame advance      |
+| T   | Turbo              |
+| L   | Toggle log-mode    |
+| I   | Toggle CPU logging |
+| K   | Toggle SPC logging |
+| J   | Dumps some data    |
 
-'Log-mode' causes it to log all executed CPU and SPC opcodes, along with register and flag state, while running a limited amount of cycles each frame.
+'Log-mode' causes it to log all executed CPU and/or SPC opcodes, along with register and flag state, while running a limited amount of cycles each frame. Each CPU can be toggled on or off (defaults to on).
 J currently dumps the 128K WRAM, 64K VRAM, 512B CGRAM, 544B OAM and 64K ARAM to a file called `dump.bin`.
 
 Save states are not supported yet, but are planned.
@@ -68,7 +70,7 @@ Quite a few TODO's are scattered throughout the code for things that are current
 
 Some things that are not emulated at all are full emulation-mode for the 65816, and the test-register ($f0) for the SPC.
 
-Some games that I have tested seem to run without obvious issues, although quite a few games do seem to glitch somewhat or freeze. `bugs.md` contains a non-exhaustive list of games with that have emulation-bugs.
+Some games that I have tested seem to run without obvious issues, although quite a few games do seem to glitch somewhat or freeze. `bugs.md` contains a non-exhaustive list of games that have emulation-bugs.
 
 ## License
 

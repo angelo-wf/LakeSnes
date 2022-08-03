@@ -305,12 +305,12 @@ static void dsp_handleGain(Dsp* dsp, int ch) {
         }
         case 2: { // linear increase
           dsp->channel[ch].gain += 32;
-          if(dsp->channel[ch].gain > 0x7ff) dsp->channel[ch].gain = 0;
+          if(dsp->channel[ch].gain > 0x7ff) dsp->channel[ch].gain = 0x7ff;
           break;
         }
         case 3: { // bent increase
           dsp->channel[ch].gain += dsp->channel[ch].gain < 0x600 ? 32 : 8;
-          if(dsp->channel[ch].gain > 0x7ff) dsp->channel[ch].gain = 0;
+          if(dsp->channel[ch].gain > 0x7ff) dsp->channel[ch].gain = 0x7ff;
           break;
         }
       }
