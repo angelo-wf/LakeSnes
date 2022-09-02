@@ -43,7 +43,8 @@ int main(int argc, char** argv) {
     printf("Failed to init SDL: %s\n", SDL_GetError());
     return 1;
   }
-  SDL_Window* window = SDL_CreateWindow("LakeSnes", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 512, 480, 0);
+  int winFlags = SDL_WINDOWPOS_UNDEFINED;
+  SDL_Window* window = SDL_CreateWindow("LakeSnes", SDL_WINDOWPOS_UNDEFINED, winFlags, 512, 480, SDL_WINDOW_RESIZABLE);
   if(window == NULL) {
     printf("Failed to create window: %s\n", SDL_GetError());
     return 1;
@@ -129,6 +130,11 @@ int main(int argc, char** argv) {
             }
             case SDLK_i: cpuPrint = !cpuPrint; break;
             case SDLK_k: spcPrint = !spcPrint; break;
+            case SDLK_RETURN:
+              if (event.key.keysym.mod & KMOD_ALT) {
+                winFlags ^= SDL_WINDOW_FULLSCREEN_DESKTOP;
+                SDL_SetWindowFullscreen(window, winFlags & SDL_WINDOW_FULLSCREEN_DESKTOP);
+              }
           }
           handleInput(snes, event.key.keysym.sym, true);
           break;
