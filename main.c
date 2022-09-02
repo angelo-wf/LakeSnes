@@ -82,6 +82,12 @@ int main(int argc, char** argv) {
   } else {
     puts("No rom loaded");
   }
+  // window title with rom-path
+  char windowTitle[255];
+  char* programTitle = "LakeSnes - ";
+  strcpy(windowTitle, programTitle);
+  strcat(windowTitle, argv[1]);
+  SDL_SetWindowTitle(window, windowTitle);
   // display stuff
   SDL_DisplayMode mode;
   SDL_GetDisplayMode(0, 0, &mode);
