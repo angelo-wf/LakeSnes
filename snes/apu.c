@@ -20,7 +20,7 @@ static const uint8_t bootRom[0x40] = {
 Apu* apu_init(Snes* snes) {
   Apu* apu = malloc(sizeof(Apu));
   apu->snes = snes;
-  apu->spc = spc_init(apu);
+  apu->spc = spc_init(apu, apu_spcRead, apu_spcWrite, apu_spcIdle);
   apu->dsp = dsp_init(apu);
   return apu;
 }
@@ -32,11 +32,12 @@ void apu_free(Apu* apu) {
 }
 
 void apu_reset(Apu* apu) {
-  apu->romReadable = true; // before resetting spc, because it reads reset vector from it
-  spc_reset(apu->spc);
+  // TODO: hard reset for apu
+  spc_reset(apu->spc, true);
   dsp_reset(apu->dsp);
   memset(apu->ram, 0, sizeof(apu->ram));
   apu->dspAdr = 0;
+  apu->romReadable = true;
   apu->cycles = 0;
   memset(apu->inPorts, 0, sizeof(apu->inPorts));
   memset(apu->outPorts, 0, sizeof(apu->outPorts));
@@ -52,7 +53,7 @@ void apu_reset(Apu* apu) {
 
 void apu_cycle(Apu* apu) {
   if(apu->cpuCyclesLeft == 0) {
-    apu->cpuCyclesLeft = spc_runOpcode(apu->spc);
+    spc_runOpcode(apu->spc);
   }
   apu->cpuCyclesLeft--;
 
@@ -80,7 +81,7 @@ void apu_cycle(Apu* apu) {
   apu->cycles++;
 }
 
-uint8_t apu_cpuRead(Apu* apu, uint16_t adr) {
+uint8_t apu_read(Apu* apu, uint16_t adr) {
   switch(adr) {
     case 0xf0:
     case 0xf1:
@@ -117,7 +118,7 @@ uint8_t apu_cpuRead(Apu* apu, uint16_t adr) {
   return apu->ram[adr];
 }
 
-void apu_cpuWrite(Apu* apu, uint16_t adr, uint8_t val) {
+void apu_write(Apu* apu, uint16_t adr, uint8_t val) {
   switch(adr) {
     case 0xf0: {
       break; // test register
@@ -169,4 +170,21 @@ void apu_cpuWrite(Apu* apu, uint16_t adr, uint8_t val) {
     }
   }
   apu->ram[adr] = val;
+}
+
+uint8_t apu_spcRead(void* mem, uint16_t adr) {
+  Apu* apu = (Apu*) mem;
+  apu->cpuCyclesLeft++;
+  return apu_read(apu, adr);
+}
+
+void apu_spcWrite(void* mem, uint16_t adr, uint8_t val) {
+  Apu* apu = (Apu*) mem;
+  apu->cpuCyclesLeft++;
+  apu_write(apu, adr, val);
+}
+
+void apu_spcIdle(void* mem, bool waiting) {
+  Apu* apu = (Apu*) mem;
+  apu->cpuCyclesLeft++;
 }

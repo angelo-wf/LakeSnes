@@ -7,9 +7,7 @@ This is a SNES emulator, written in C, mostly as a followup on my [earlier Javas
 
 The intent is for it to be formed as a library, which could then be used in other projects. (Maybe it could be compiled for the web with Emscripten as well, to replace the core from that JS emulator).
 
-Performance, although much better than my JS version, is still quite bad though, especially when compared to emulators like BSNES or SNES9X (it uses around 80% of one core, whereas SNES9X only uses around 15%).
-
-Note that this was known as 'ElzSnes' for a little while before being renamed to LakeSnes.
+Performance, although much better than my JS version, is still quite bad though, especially when compared to emulators like BSNES or SNES9X (it used around 80% of one core whereas SNES9X only used around 15%, on my old hardware).
 
 ## Compiling
 
@@ -54,6 +52,8 @@ Additionally, the following command are available:
 | K   | Toggle SPC logging |
 | J   | Dumps some data    |
 
+Alt+Enter can be used to toggle fullscreen (note that this seems to show some graphical garbage on macOS for some reason).
+
 'Log-mode' causes it to log all executed CPU and/or SPC opcodes, along with register and flag state, while running a limited amount of cycles each frame. Each CPU can be toggled on or off (defaults to on).
 J currently dumps the 128K WRAM, 64K VRAM, 512B CGRAM, 544B OAM and 64K ARAM to a file called `dump.bin`.
 
@@ -75,3 +75,23 @@ Some games that I have tested seem to run without obvious issues, although quite
 ## License
 
 This project is licensed under the MIT license. See 'LICENSE.txt' for details.
+
+## Resources
+
+- The WDC datasheet for the W65C816S cpu.
+- The [65C816 opcodes tutorial](http://6502.org/tutorials/65c816opcodes.html) from 6502.org.
+- The [65816 opcode matrix](http://www.oxyron.de/html/opcodes816.html) from oxyron.de (the cycle timing and notes there aren't fully accurate, and the addressing modes IAL and IAX are swapped for JMP (opcodes $7C and $EC)).
+- The [SuperFamicon wiki](https://wiki.superfamicom.org).
+- The [SnesDev Wiki](https://snesdev.mesen.ca/wiki/index.php?title=Main_Page) by Sour (seems to be abadoned).
+- The [SnesDev Wiki](https://snes.nesdev.org/wiki/Main_Page) at NesDev.
+- Some quick peeks at Sour's [Mesen-S source](https://github.com/SourMesen/Mesen-S).
+- Some quick peeks at Byuu's [Higan source](https://github.com/byuu/higan).
+- The [nocach fullsnes document](https://problemkaputt.de/fullsnes.txt).
+- Some posts and resources in the [SnesDev section](https://forums.nesdev.org/viewforum.php?f=12) of the NesDev forums.
+- The [Super NES Programming pages](https://en.wikibooks.org/wiki/Super_NES_Programming) in Wikibooks.
+- Various roms (especially the CPU tests) by PeterLemon/krom found [here](https://github.com/PeterLemon/SNES).
+- The 65816 tests by TomHarte found [here](https://github.com/TomHarte/ProcessorTests).
+- The SPC700 tests by raddad772 found [here](https://github.com/raddad772/jsmoo/tree/main/misc/tests/GeneratedTests) (part of JSmoo, a JS-based set of emulators; tests also included in TomHarte's repo).
+- Various SPC and DSP test by Blargg (from [here](https://forums.nesdev.org/viewtopic.php?f=12&t=10697&p=121027#p121027) and [here](https://forums.nesdev.org/viewtopic.php?f=12&t=18005)).
+- The source for the BRR-tools from [SMW central](https://www.smwcentral.net), found [here](https://github.com/jimbo1qaz/BRRtools/tree/32-bit-samples).
+- [This](https://github.com/kuba--/zip) zip-library is used for zipped rom loading support.

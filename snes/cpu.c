@@ -6,60 +6,35 @@
 #include <stdbool.h>
 
 #include "cpu.h"
-#include "snes.h"
-
-static const int cyclesPerOpcode[256] = {
-  7, 6, 7, 4, 5, 3, 5, 6, 3, 2, 2, 4, 6, 4, 6, 5,
-  2, 5, 5, 7, 5, 4, 6, 6, 2, 4, 2, 2, 6, 4, 7, 5,
-  6, 6, 8, 4, 3, 3, 5, 6, 4, 2, 2, 5, 4, 4, 6, 5,
-  2, 5, 5, 7, 4, 4, 6, 6, 2, 4, 2, 2, 4, 4, 7, 5,
-  6, 6, 2, 4, 7, 3, 5, 6, 3, 2, 2, 3, 3, 4, 6, 5,
-  2, 5, 5, 7, 7, 4, 6, 6, 2, 4, 3, 2, 4, 4, 7, 5,
-  6, 6, 6, 4, 3, 3, 5, 6, 4, 2, 2, 6, 5, 4, 6, 5,
-  2, 5, 5, 7, 4, 4, 6, 6, 2, 4, 4, 2, 6, 4, 7, 5,
-  3, 6, 4, 4, 3, 3, 3, 6, 2, 2, 2, 3, 4, 4, 4, 5,
-  2, 6, 5, 7, 4, 4, 4, 6, 2, 5, 2, 2, 4, 5, 5, 5,
-  2, 6, 2, 4, 3, 3, 3, 6, 2, 2, 2, 4, 4, 4, 4, 5,
-  2, 5, 5, 7, 4, 4, 4, 6, 2, 4, 2, 2, 4, 4, 4, 5,
-  2, 6, 3, 4, 3, 3, 5, 6, 2, 2, 2, 3, 4, 4, 6, 5,
-  2, 5, 5, 7, 6, 4, 6, 6, 2, 4, 3, 3, 6, 4, 7, 5,
-  2, 6, 3, 4, 3, 3, 5, 6, 2, 2, 2, 3, 4, 4, 6, 5,
-  2, 5, 5, 7, 5, 4, 6, 6, 2, 4, 4, 2, 8, 4, 7, 5
-};
 
 static uint8_t cpu_read(Cpu* cpu, uint32_t adr);
 static void cpu_write(Cpu* cpu, uint32_t adr, uint8_t val);
+static void cpu_idle(Cpu* cpu);
+static void cpu_idleWait(Cpu* cpu);
+static void cpu_checkInt(Cpu* cpu);
 static uint8_t cpu_readOpcode(Cpu* cpu);
-static uint16_t cpu_readOpcodeWord(Cpu* cpu);
+static uint16_t cpu_readOpcodeWord(Cpu* cpu, bool intCheck);
 static uint8_t cpu_getFlags(Cpu* cpu);
 static void cpu_setFlags(Cpu* cpu, uint8_t value);
 static void cpu_setZN(Cpu* cpu, uint16_t value, bool byte);
-static void cpu_doBranch(Cpu* cpu, uint8_t value, bool check);
+static void cpu_doBranch(Cpu* cpu, bool check);
 static uint8_t cpu_pullByte(Cpu* cpu);
 static void cpu_pushByte(Cpu* cpu, uint8_t value);
-static uint16_t cpu_pullWord(Cpu* cpu);
-static void cpu_pushWord(Cpu* cpu, uint16_t value);
-static uint16_t cpu_readWord(Cpu* cpu, uint32_t adrl, uint32_t adrh);
-static void cpu_writeWord(Cpu* cpu, uint32_t adrl, uint32_t adrh, uint16_t value, bool reversed);
-static void cpu_doInterrupt(Cpu* cpu, bool irq);
+static uint16_t cpu_pullWord(Cpu* cpu, bool intCheck);
+static void cpu_pushWord(Cpu* cpu, uint16_t value, bool intCheck);
+static uint16_t cpu_readWord(Cpu* cpu, uint32_t adrl, uint32_t adrh, bool intCheck);
+static void cpu_writeWord(Cpu* cpu, uint32_t adrl, uint32_t adrh, uint16_t value, bool reversed, bool intCheck);
+static void cpu_doInterrupt(Cpu* cpu);
 static void cpu_doOpcode(Cpu* cpu, uint8_t opcode);
 
 // addressing modes and opcode functions not declared, only used after defintions
 
-static uint8_t cpu_read(Cpu* cpu, uint32_t adr) {
-  // assume mem is a pointer to a Snes
-  return snes_cpuRead((Snes*) cpu->mem, adr);
-}
-
-static void cpu_write(Cpu* cpu, uint32_t adr, uint8_t val) {
-  // assume mem is a pointer to a Snes
-  snes_cpuWrite((Snes*) cpu->mem, adr, val);
-}
-
-Cpu* cpu_init(void* mem, int memType) {
+Cpu* cpu_init(void* mem, CpuReadHandler read, CpuWriteHandler write, CpuIdleHandler idle) {
   Cpu* cpu = malloc(sizeof(Cpu));
   cpu->mem = mem;
-  cpu->memType = memType;
+  cpu->read = read;
+  cpu->write = write;
+  cpu->idle = idle;
   return cpu;
 }
 
@@ -67,64 +42,110 @@ void cpu_free(Cpu* cpu) {
   free(cpu);
 }
 
-void cpu_reset(Cpu* cpu) {
-  cpu->a = 0;
-  cpu->x = 0;
-  cpu->y = 0;
-  cpu->sp = 0x100;
-  cpu->pc = cpu_read(cpu, 0xfffc) | (cpu_read(cpu, 0xfffd) << 8);
-  cpu->dp = 0;
-  cpu->k = 0;
-  cpu->db = 0;
-  cpu->c = false;
-  cpu->z = false;
-  cpu->v = false;
-  cpu->n = false;
-  cpu->i = true;
-  cpu->d = false;
-  cpu->xf = true;
-  cpu->mf = true;
-  cpu->e = true;
-  cpu->irqWanted = false;
-  cpu->nmiWanted = false;
+void cpu_reset(Cpu* cpu, bool hard) {
+  if(hard) {
+    cpu->a = 0;
+    cpu->x = 0;
+    cpu->y = 0;
+    cpu->sp = 0;
+    cpu->pc = 0;
+    cpu->dp = 0;
+    cpu->k = 0;
+    cpu->db = 0;
+    cpu->c = false;
+    cpu->z = false;
+    cpu->v = false;
+    cpu->n = false;
+    cpu->i = false;
+    cpu->d = false;
+    cpu->xf = false;
+    cpu->mf = false;
+    cpu->e = false;
+    cpu->irqWanted = false;
+  }
   cpu->waiting = false;
   cpu->stopped = false;
-  cpu->cyclesUsed = 0;
+  cpu->nmiWanted = false;
+  cpu->intWanted = false;
+  cpu->resetWanted = true;
 }
 
-int cpu_runOpcode(Cpu* cpu) {
-  cpu->cyclesUsed = 0;
-  if(cpu->stopped) return 1;
+void cpu_runOpcode(Cpu* cpu) {
+  if(cpu->resetWanted) {
+    cpu->resetWanted = false;
+    // reset: brk/interrupt without writes
+    cpu_read(cpu, (cpu->k << 16) | cpu->pc);
+    cpu_idle(cpu);
+    cpu_read(cpu, 0x100 | (cpu->sp-- & 0xff));
+    cpu_read(cpu, 0x100 | (cpu->sp-- & 0xff));
+    cpu_read(cpu, 0x100 | (cpu->sp-- & 0xff));
+    cpu->sp = (cpu->sp & 0xff) | 0x100;
+    cpu->e = true;
+    cpu->i = true;
+    cpu->d = false;
+    cpu_setFlags(cpu, cpu_getFlags(cpu)); // updates x and m flags, clears upper half of x and y if needed
+    cpu->k = 0;
+    cpu->pc = cpu_readWord(cpu, 0xfffc, 0xfffd, false);
+    return;
+  }
+  if(cpu->stopped) {
+    cpu_idleWait(cpu);
+    return;
+  }
   if(cpu->waiting) {
     if(cpu->irqWanted || cpu->nmiWanted) {
       cpu->waiting = false;
+      cpu_checkInt(cpu);
+    } else {
+      cpu_idleWait(cpu);
+      return;
     }
-    return 1;
   }
   // not stopped or waiting, execute a opcode or go to interrupt
-  if((!cpu->i && cpu->irqWanted) || cpu->nmiWanted) {
-    cpu->cyclesUsed = 7; // interrupt: at least 7 cycles
-    if(cpu->nmiWanted) {
-      cpu->nmiWanted = false;
-      cpu_doInterrupt(cpu, false);
-    } else {
-      // must be irq
-      cpu_doInterrupt(cpu, true);
-    }
+  if(cpu->intWanted) {
+    cpu_read(cpu, (cpu->k << 16) | cpu->pc);
+    cpu_doInterrupt(cpu);
   } else {
     uint8_t opcode = cpu_readOpcode(cpu);
-    cpu->cyclesUsed = cyclesPerOpcode[opcode];
     cpu_doOpcode(cpu, opcode);
   }
-  return cpu->cyclesUsed;
+}
+
+void cpu_nmi(Cpu* cpu) {
+  cpu->nmiWanted = true;
+}
+
+void cpu_setIrq(Cpu* cpu, bool state) {
+  cpu->irqWanted = state;
+}
+
+static uint8_t cpu_read(Cpu* cpu, uint32_t adr) {
+  return cpu->read(cpu->mem, adr);
+}
+
+static void cpu_write(Cpu* cpu, uint32_t adr, uint8_t val) {
+  cpu->write(cpu->mem, adr, val);
+}
+
+static void cpu_idle(Cpu* cpu) {
+  cpu->idle(cpu->mem, false);
+}
+
+static void cpu_idleWait(Cpu* cpu) {
+  cpu->idle(cpu->mem, true);
+}
+
+static void cpu_checkInt(Cpu* cpu) {
+  cpu->intWanted = cpu->nmiWanted || (cpu->irqWanted && !cpu->i);
 }
 
 static uint8_t cpu_readOpcode(Cpu* cpu) {
   return cpu_read(cpu, (cpu->k << 16) | cpu->pc++);
 }
 
-static uint16_t cpu_readOpcodeWord(Cpu* cpu) {
+static uint16_t cpu_readOpcodeWord(Cpu* cpu, bool intCheck) {
   uint8_t low = cpu_readOpcode(cpu);
+  if(intCheck) cpu_checkInt(cpu);
   return low | (cpu_readOpcode(cpu) << 8);
 }
 
@@ -170,9 +191,12 @@ static void cpu_setZN(Cpu* cpu, uint16_t value, bool byte) {
   }
 }
 
-static void cpu_doBranch(Cpu* cpu, uint8_t value, bool check) {
+static void cpu_doBranch(Cpu* cpu, bool check) {
+  if(!check) cpu_checkInt(cpu);
+  uint8_t value = cpu_readOpcode(cpu);
   if(check) {
-    cpu->cyclesUsed++; // taken branch: 1 extra cycle
+    cpu_checkInt(cpu);
+    cpu_idle(cpu); // taken branch: 1 extra cycle
     cpu->pc += (int8_t) value;
   }
 }
@@ -189,48 +213,66 @@ static void cpu_pushByte(Cpu* cpu, uint8_t value) {
   if(cpu->e) cpu->sp = (cpu->sp & 0xff) | 0x100;
 }
 
-static uint16_t cpu_pullWord(Cpu* cpu) {
+static uint16_t cpu_pullWord(Cpu* cpu, bool intCheck) {
   uint8_t value = cpu_pullByte(cpu);
+  if(intCheck) cpu_checkInt(cpu);
   return value | (cpu_pullByte(cpu) << 8);
 }
 
-static void cpu_pushWord(Cpu* cpu, uint16_t value) {
+static void cpu_pushWord(Cpu* cpu, uint16_t value, bool intCheck) {
   cpu_pushByte(cpu, value >> 8);
+  if(intCheck) cpu_checkInt(cpu);
   cpu_pushByte(cpu, value & 0xff);
 }
 
-static uint16_t cpu_readWord(Cpu* cpu, uint32_t adrl, uint32_t adrh) {
+static uint16_t cpu_readWord(Cpu* cpu, uint32_t adrl, uint32_t adrh, bool intCheck) {
   uint8_t value = cpu_read(cpu, adrl);
+  if(intCheck) cpu_checkInt(cpu);
   return value | (cpu_read(cpu, adrh) << 8);
 }
 
-static void cpu_writeWord(Cpu* cpu, uint32_t adrl, uint32_t adrh, uint16_t value, bool reversed) {
+static void cpu_writeWord(Cpu* cpu, uint32_t adrl, uint32_t adrh, uint16_t value, bool reversed, bool intCheck) {
   if(reversed) {
     cpu_write(cpu, adrh, value >> 8);
+    if(intCheck) cpu_checkInt(cpu);
     cpu_write(cpu, adrl, value & 0xff);
   } else {
     cpu_write(cpu, adrl, value & 0xff);
+    if(intCheck) cpu_checkInt(cpu);
     cpu_write(cpu, adrh, value >> 8);
   }
 }
 
-static void cpu_doInterrupt(Cpu* cpu, bool irq) {
+static void cpu_doInterrupt(Cpu* cpu) {
+  cpu_idle(cpu);
   cpu_pushByte(cpu, cpu->k);
-  cpu_pushWord(cpu, cpu->pc);
+  cpu_pushWord(cpu, cpu->pc, false);
   cpu_pushByte(cpu, cpu_getFlags(cpu));
-  cpu->cyclesUsed++; // native mode: 1 extra cycle
   cpu->i = true;
   cpu->d = false;
   cpu->k = 0;
-  if(irq) {
-    cpu->pc = cpu_readWord(cpu, 0xffee, 0xffef);
-  } else {
-    // nmi
-    cpu->pc = cpu_readWord(cpu, 0xffea, 0xffeb);
+  cpu->intWanted = false;
+  if(cpu->nmiWanted) {
+    cpu->nmiWanted = false;
+    cpu->pc = cpu_readWord(cpu, 0xffea, 0xffeb, false);
+  } else { // irq
+    cpu->pc = cpu_readWord(cpu, 0xffee, 0xffef, false);
   }
 }
 
 // addressing modes
+
+static void cpu_adrImp(Cpu* cpu) {
+  // only for 2-cycle implied opcodes
+  cpu_checkInt(cpu);
+  if(cpu->intWanted) {
+    // if interrupt detected in 2-cycle implied/accumulator opcode,
+    // idle cycle turns into read from pc
+    cpu_read(cpu, (cpu->k << 16) | cpu->pc);
+  } else {
+    cpu_idle(cpu);
+  }
+}
 
 static uint32_t cpu_adrImm(Cpu* cpu, uint32_t* low, bool xFlag) {
   if((xFlag && cpu->xf) || (!xFlag && cpu->mf)) {
@@ -244,55 +286,58 @@ static uint32_t cpu_adrImm(Cpu* cpu, uint32_t* low, bool xFlag) {
 
 static uint32_t cpu_adrDp(Cpu* cpu, uint32_t* low) {
   uint8_t adr = cpu_readOpcode(cpu);
-  if(cpu->dp & 0xff) cpu->cyclesUsed++; // dpr not 0: 1 extra cycle
+  if(cpu->dp & 0xff) cpu_idle(cpu); // dpr not 0: 1 extra cycle
   *low = (cpu->dp + adr) & 0xffff;
   return (cpu->dp + adr + 1) & 0xffff;
 }
 
 static uint32_t cpu_adrDpx(Cpu* cpu, uint32_t* low) {
   uint8_t adr = cpu_readOpcode(cpu);
-  if(cpu->dp & 0xff) cpu->cyclesUsed++; // dpr not 0: 1 extra cycle
+  if(cpu->dp & 0xff) cpu_idle(cpu); // dpr not 0: 1 extra cycle
+  cpu_idle(cpu);
   *low = (cpu->dp + adr + cpu->x) & 0xffff;
   return (cpu->dp + adr + cpu->x + 1) & 0xffff;
 }
 
 static uint32_t cpu_adrDpy(Cpu* cpu, uint32_t* low) {
   uint8_t adr = cpu_readOpcode(cpu);
-  if(cpu->dp & 0xff) cpu->cyclesUsed++; // dpr not 0: 1 extra cycle
+  if(cpu->dp & 0xff) cpu_idle(cpu); // dpr not 0: 1 extra cycle
+  cpu_idle(cpu);
   *low = (cpu->dp + adr + cpu->y) & 0xffff;
   return (cpu->dp + adr + cpu->y + 1) & 0xffff;
 }
 
 static uint32_t cpu_adrIdp(Cpu* cpu, uint32_t* low) {
   uint8_t adr = cpu_readOpcode(cpu);
-  if(cpu->dp & 0xff) cpu->cyclesUsed++; // dpr not 0: 1 extra cycle
-  uint16_t pointer = cpu_readWord(cpu, (cpu->dp + adr) & 0xffff, (cpu->dp + adr + 1) & 0xffff);
+  if(cpu->dp & 0xff) cpu_idle(cpu); // dpr not 0: 1 extra cycle
+  uint16_t pointer = cpu_readWord(cpu, (cpu->dp + adr) & 0xffff, (cpu->dp + adr + 1) & 0xffff, false);
   *low = (cpu->db << 16) + pointer;
   return ((cpu->db << 16) + pointer + 1) & 0xffffff;
 }
 
 static uint32_t cpu_adrIdx(Cpu* cpu, uint32_t* low) {
   uint8_t adr = cpu_readOpcode(cpu);
-  if(cpu->dp & 0xff) cpu->cyclesUsed++; // dpr not 0: 1 extra cycle
-  uint16_t pointer = cpu_readWord(cpu, (cpu->dp + adr + cpu->x) & 0xffff, (cpu->dp + adr + cpu->x + 1) & 0xffff);
+  if(cpu->dp & 0xff) cpu_idle(cpu); // dpr not 0: 1 extra cycle
+  cpu_idle(cpu);
+  uint16_t pointer = cpu_readWord(cpu, (cpu->dp + adr + cpu->x) & 0xffff, (cpu->dp + adr + cpu->x + 1) & 0xffff, false);
   *low = (cpu->db << 16) + pointer;
   return ((cpu->db << 16) + pointer + 1) & 0xffffff;
 }
 
 static uint32_t cpu_adrIdy(Cpu* cpu, uint32_t* low, bool write) {
   uint8_t adr = cpu_readOpcode(cpu);
-  if(cpu->dp & 0xff) cpu->cyclesUsed++; // dpr not 0: 1 extra cycle
-  uint16_t pointer = cpu_readWord(cpu, (cpu->dp + adr) & 0xffff, (cpu->dp + adr + 1) & 0xffff);
-  if(write && (!cpu->xf || ((pointer >> 8) != ((pointer + cpu->y) >> 8)))) cpu->cyclesUsed++;
-  // x = 0 or page crossed, with writing opcode: 1 extra cycle
+  if(cpu->dp & 0xff) cpu_idle(cpu); // dpr not 0: 1 extra cycle
+  uint16_t pointer = cpu_readWord(cpu, (cpu->dp + adr) & 0xffff, (cpu->dp + adr + 1) & 0xffff, false);
+  // writing opcode or x = 0 or page crossed: 1 extra cycle
+  if(write || !cpu->xf || ((pointer >> 8) != ((pointer + cpu->y) >> 8))) cpu_idle(cpu);
   *low = ((cpu->db << 16) + pointer + cpu->y) & 0xffffff;
   return ((cpu->db << 16) + pointer + cpu->y + 1) & 0xffffff;
 }
 
 static uint32_t cpu_adrIdl(Cpu* cpu, uint32_t* low) {
   uint8_t adr = cpu_readOpcode(cpu);
-  if(cpu->dp & 0xff) cpu->cyclesUsed++; // dpr not 0: 1 extra cycle
-  uint32_t pointer = cpu_readWord(cpu, (cpu->dp + adr) & 0xffff, (cpu->dp + adr + 1) & 0xffff);
+  if(cpu->dp & 0xff) cpu_idle(cpu); // dpr not 0: 1 extra cycle
+  uint32_t pointer = cpu_readWord(cpu, (cpu->dp + adr) & 0xffff, (cpu->dp + adr + 1) & 0xffff, false);
   pointer |= cpu_read(cpu, (cpu->dp + adr + 2) & 0xffff) << 16;
   *low = pointer;
   return (pointer + 1) & 0xffffff;
@@ -300,8 +345,8 @@ static uint32_t cpu_adrIdl(Cpu* cpu, uint32_t* low) {
 
 static uint32_t cpu_adrIly(Cpu* cpu, uint32_t* low) {
   uint8_t adr = cpu_readOpcode(cpu);
-  if(cpu->dp & 0xff) cpu->cyclesUsed++; // dpr not 0: 1 extra cycle
-  uint32_t pointer = cpu_readWord(cpu, (cpu->dp + adr) & 0xffff, (cpu->dp + adr + 1) & 0xffff);
+  if(cpu->dp & 0xff) cpu_idle(cpu); // dpr not 0: 1 extra cycle
+  uint32_t pointer = cpu_readWord(cpu, (cpu->dp + adr) & 0xffff, (cpu->dp + adr + 1) & 0xffff, false);
   pointer |= cpu_read(cpu, (cpu->dp + adr + 2) & 0xffff) << 16;
   *low = (pointer + cpu->y) & 0xffffff;
   return (pointer + cpu->y + 1) & 0xffffff;
@@ -309,67 +354,65 @@ static uint32_t cpu_adrIly(Cpu* cpu, uint32_t* low) {
 
 static uint32_t cpu_adrSr(Cpu* cpu, uint32_t* low) {
   uint8_t adr = cpu_readOpcode(cpu);
+  cpu_idle(cpu);
   *low = (cpu->sp + adr) & 0xffff;
   return (cpu->sp + adr + 1) & 0xffff;
 }
 
 static uint32_t cpu_adrIsy(Cpu* cpu, uint32_t* low) {
   uint8_t adr = cpu_readOpcode(cpu);
-  uint16_t pointer = cpu_readWord(cpu, (cpu->sp + adr) & 0xffff, (cpu->sp + adr + 1) & 0xffff);
+  cpu_idle(cpu);
+  uint16_t pointer = cpu_readWord(cpu, (cpu->sp + adr) & 0xffff, (cpu->sp + adr + 1) & 0xffff, false);
+  cpu_idle(cpu);
   *low = ((cpu->db << 16) + pointer + cpu->y) & 0xffffff;
   return ((cpu->db << 16) + pointer + cpu->y + 1) & 0xffffff;
 }
 
 static uint32_t cpu_adrAbs(Cpu* cpu, uint32_t* low) {
-  uint16_t adr = cpu_readOpcodeWord(cpu);
+  uint16_t adr = cpu_readOpcodeWord(cpu, false);
   *low = (cpu->db << 16) + adr;
   return ((cpu->db << 16) + adr + 1) & 0xffffff;
 }
 
 static uint32_t cpu_adrAbx(Cpu* cpu, uint32_t* low, bool write) {
-  uint16_t adr = cpu_readOpcodeWord(cpu);
-  if(write && (!cpu->xf || ((adr >> 8) != ((adr + cpu->x) >> 8)))) cpu->cyclesUsed++;
-  // x = 0 or page crossed, with writing opcode: 1 extra cycle
+  uint16_t adr = cpu_readOpcodeWord(cpu, false);
+  // writing opcode or x = 0 or page crossed: 1 extra cycle
+  if(write || !cpu->xf || ((adr >> 8) != ((adr + cpu->x) >> 8))) cpu_idle(cpu);
   *low = ((cpu->db << 16) + adr + cpu->x) & 0xffffff;
   return ((cpu->db << 16) + adr + cpu->x + 1) & 0xffffff;
 }
 
 static uint32_t cpu_adrAby(Cpu* cpu, uint32_t* low, bool write) {
-  uint16_t adr = cpu_readOpcodeWord(cpu);
-  if(write && (!cpu->xf || ((adr >> 8) != ((adr + cpu->y) >> 8)))) cpu->cyclesUsed++;
-  // x = 0 or page crossed, with writing opcode: 1 extra cycle
+  uint16_t adr = cpu_readOpcodeWord(cpu, false);
+  // writing opcode or x = 0 or page crossed: 1 extra cycle
+  if(write || !cpu->xf || ((adr >> 8) != ((adr + cpu->y) >> 8))) cpu_idle(cpu);
   *low = ((cpu->db << 16) + adr + cpu->y) & 0xffffff;
   return ((cpu->db << 16) + adr + cpu->y + 1) & 0xffffff;
 }
 
 static uint32_t cpu_adrAbl(Cpu* cpu, uint32_t* low) {
-  uint32_t adr = cpu_readOpcodeWord(cpu);
+  uint32_t adr = cpu_readOpcodeWord(cpu, false);
   adr |= cpu_readOpcode(cpu) << 16;
   *low = adr;
   return (adr + 1) & 0xffffff;
 }
 
 static uint32_t cpu_adrAlx(Cpu* cpu, uint32_t* low) {
-  uint32_t adr = cpu_readOpcodeWord(cpu);
+  uint32_t adr = cpu_readOpcodeWord(cpu, false);
   adr |= cpu_readOpcode(cpu) << 16;
   *low = (adr + cpu->x) & 0xffffff;
   return (adr + cpu->x + 1) & 0xffffff;
-}
-
-static uint16_t cpu_adrIax(Cpu* cpu) {
-  uint16_t adr = cpu_readOpcodeWord(cpu);
-  return cpu_readWord(cpu, (cpu->k << 16) | ((adr + cpu->x) & 0xffff), (cpu->k << 16) | ((adr + cpu->x + 1) & 0xffff));
 }
 
 // opcode functions
 
 static void cpu_and(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
+    cpu_checkInt(cpu);
     uint8_t value = cpu_read(cpu, low);
     cpu->a = (cpu->a & 0xff00) | ((cpu->a & value) & 0xff);
   } else {
-    cpu->cyclesUsed++; // m = 0: 1 extra cycle
-    uint16_t value = cpu_readWord(cpu, low, high);
+    uint16_t value = cpu_readWord(cpu, low, high, true);
     cpu->a &= value;
   }
   cpu_setZN(cpu, cpu->a, cpu->mf);
@@ -377,11 +420,11 @@ static void cpu_and(Cpu* cpu, uint32_t low, uint32_t high) {
 
 static void cpu_ora(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
+    cpu_checkInt(cpu);
     uint8_t value = cpu_read(cpu, low);
     cpu->a = (cpu->a & 0xff00) | ((cpu->a | value) & 0xff);
   } else {
-    cpu->cyclesUsed++; // m = 0: 1 extra cycle
-    uint16_t value = cpu_readWord(cpu, low, high);
+    uint16_t value = cpu_readWord(cpu, low, high, true);
     cpu->a |= value;
   }
   cpu_setZN(cpu, cpu->a, cpu->mf);
@@ -389,11 +432,11 @@ static void cpu_ora(Cpu* cpu, uint32_t low, uint32_t high) {
 
 static void cpu_eor(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
+    cpu_checkInt(cpu);
     uint8_t value = cpu_read(cpu, low);
     cpu->a = (cpu->a & 0xff00) | ((cpu->a ^ value) & 0xff);
   } else {
-    cpu->cyclesUsed++; // m = 0: 1 extra cycle
-    uint16_t value = cpu_readWord(cpu, low, high);
+    uint16_t value = cpu_readWord(cpu, low, high, true);
     cpu->a ^= value;
   }
   cpu_setZN(cpu, cpu->a, cpu->mf);
@@ -401,6 +444,7 @@ static void cpu_eor(Cpu* cpu, uint32_t low, uint32_t high) {
 
 static void cpu_adc(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
+    cpu_checkInt(cpu);
     uint8_t value = cpu_read(cpu, low);
     int result = 0;
     if(cpu->d) {
@@ -415,8 +459,7 @@ static void cpu_adc(Cpu* cpu, uint32_t low, uint32_t high) {
     cpu->c = result > 0xff;
     cpu->a = (cpu->a & 0xff00) | (result & 0xff);
   } else {
-    cpu->cyclesUsed++; // m = 0: 1 extra cycle
-    uint16_t value = cpu_readWord(cpu, low, high);
+    uint16_t value = cpu_readWord(cpu, low, high, true);
     int result = 0;
     if(cpu->d) {
       result = (cpu->a & 0xf) + (value & 0xf) + cpu->c;
@@ -439,6 +482,7 @@ static void cpu_adc(Cpu* cpu, uint32_t low, uint32_t high) {
 
 static void cpu_sbc(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
+    cpu_checkInt(cpu);
     uint8_t value = cpu_read(cpu, low) ^ 0xff;
     int result = 0;
     if(cpu->d) {
@@ -453,8 +497,7 @@ static void cpu_sbc(Cpu* cpu, uint32_t low, uint32_t high) {
     cpu->c = result > 0xff;
     cpu->a = (cpu->a & 0xff00) | (result & 0xff);
   } else {
-    cpu->cyclesUsed++; // m = 0: 1 extra cycle
-    uint16_t value = cpu_readWord(cpu, low, high) ^ 0xffff;
+    uint16_t value = cpu_readWord(cpu, low, high, true) ^ 0xffff;
     int result = 0;
     if(cpu->d) {
       result = (cpu->a & 0xf) + (value & 0xf) + cpu->c;
@@ -478,12 +521,12 @@ static void cpu_sbc(Cpu* cpu, uint32_t low, uint32_t high) {
 static void cpu_cmp(Cpu* cpu, uint32_t low, uint32_t high) {
   int result = 0;
   if(cpu->mf) {
+    cpu_checkInt(cpu);
     uint8_t value = cpu_read(cpu, low) ^ 0xff;
     result = (cpu->a & 0xff) + value + 1;
     cpu->c = result > 0xff;
   } else {
-    cpu->cyclesUsed++; // m = 0: 1 extra cycle
-    uint16_t value = cpu_readWord(cpu, low, high) ^ 0xffff;
+    uint16_t value = cpu_readWord(cpu, low, high, true) ^ 0xffff;
     result = cpu->a + value + 1;
     cpu->c = result > 0xffff;
   }
@@ -493,12 +536,12 @@ static void cpu_cmp(Cpu* cpu, uint32_t low, uint32_t high) {
 static void cpu_cpx(Cpu* cpu, uint32_t low, uint32_t high) {
   int result = 0;
   if(cpu->xf) {
+    cpu_checkInt(cpu);
     uint8_t value = cpu_read(cpu, low) ^ 0xff;
     result = (cpu->x & 0xff) + value + 1;
     cpu->c = result > 0xff;
   } else {
-    cpu->cyclesUsed++; // x = 0: 1 extra cycle
-    uint16_t value = cpu_readWord(cpu, low, high) ^ 0xffff;
+    uint16_t value = cpu_readWord(cpu, low, high, true) ^ 0xffff;
     result = cpu->x + value + 1;
     cpu->c = result > 0xffff;
   }
@@ -508,12 +551,12 @@ static void cpu_cpx(Cpu* cpu, uint32_t low, uint32_t high) {
 static void cpu_cpy(Cpu* cpu, uint32_t low, uint32_t high) {
   int result = 0;
   if(cpu->xf) {
+    cpu_checkInt(cpu);
     uint8_t value = cpu_read(cpu, low) ^ 0xff;
     result = (cpu->y & 0xff) + value + 1;
     cpu->c = result > 0xff;
   } else {
-    cpu->cyclesUsed++; // x = 0: 1 extra cycle
-    uint16_t value = cpu_readWord(cpu, low, high) ^ 0xffff;
+    uint16_t value = cpu_readWord(cpu, low, high, true) ^ 0xffff;
     result = cpu->y + value + 1;
     cpu->c = result > 0xffff;
   }
@@ -522,14 +565,14 @@ static void cpu_cpy(Cpu* cpu, uint32_t low, uint32_t high) {
 
 static void cpu_bit(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
+    cpu_checkInt(cpu);
     uint8_t value = cpu_read(cpu, low);
     uint8_t result = (cpu->a & 0xff) & value;
     cpu->z = result == 0;
     cpu->n = value & 0x80;
     cpu->v = value & 0x40;
   } else {
-    cpu->cyclesUsed++; // m = 0: 1 extra cycle
-    uint16_t value = cpu_readWord(cpu, low, high);
+    uint16_t value = cpu_readWord(cpu, low, high, true);
     uint16_t result = cpu->a & value;
     cpu->z = result == 0;
     cpu->n = value & 0x8000;
@@ -539,67 +582,67 @@ static void cpu_bit(Cpu* cpu, uint32_t low, uint32_t high) {
 
 static void cpu_lda(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
+    cpu_checkInt(cpu);
     cpu->a = (cpu->a & 0xff00) | cpu_read(cpu, low);
   } else {
-    cpu->cyclesUsed++; // m = 0: 1 extra cycle
-    cpu->a = cpu_readWord(cpu, low, high);
+    cpu->a = cpu_readWord(cpu, low, high, true);
   }
   cpu_setZN(cpu, cpu->a, cpu->mf);
 }
 
 static void cpu_ldx(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->xf) {
+    cpu_checkInt(cpu);
     cpu->x = cpu_read(cpu, low);
   } else {
-    cpu->cyclesUsed++; // x = 0: 1 extra cycle
-    cpu->x = cpu_readWord(cpu, low, high);
+    cpu->x = cpu_readWord(cpu, low, high, true);
   }
   cpu_setZN(cpu, cpu->x, cpu->xf);
 }
 
 static void cpu_ldy(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->xf) {
+    cpu_checkInt(cpu);
     cpu->y = cpu_read(cpu, low);
   } else {
-    cpu->cyclesUsed++; // x = 0: 1 extra cycle
-    cpu->y = cpu_readWord(cpu, low, high);
+    cpu->y = cpu_readWord(cpu, low, high, true);
   }
   cpu_setZN(cpu, cpu->y, cpu->xf);
 }
 
 static void cpu_sta(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, cpu->a);
   } else {
-    cpu->cyclesUsed++; // m = 0: 1 extra cycle
-    cpu_writeWord(cpu, low, high, cpu->a, false);
+    cpu_writeWord(cpu, low, high, cpu->a, false, true);
   }
 }
 
 static void cpu_stx(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->xf) {
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, cpu->x);
   } else {
-    cpu->cyclesUsed++; // x = 0: 1 extra cycle
-    cpu_writeWord(cpu, low, high, cpu->x, false);
+    cpu_writeWord(cpu, low, high, cpu->x, false, true);
   }
 }
 
 static void cpu_sty(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->xf) {
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, cpu->y);
   } else {
-    cpu->cyclesUsed++; // x = 0: 1 extra cycle
-    cpu_writeWord(cpu, low, high, cpu->y, false);
+    cpu_writeWord(cpu, low, high, cpu->y, false, true);
   }
 }
 
 static void cpu_stz(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, 0);
   } else {
-    cpu->cyclesUsed++; // m = 0: 1 extra cycle
-    cpu_writeWord(cpu, low, high, 0, false);
+    cpu_writeWord(cpu, low, high, 0, false, true);
   }
 }
 
@@ -608,15 +651,17 @@ static void cpu_ror(Cpu* cpu, uint32_t low, uint32_t high) {
   int result = 0;
   if(cpu->mf) {
     uint8_t value = cpu_read(cpu, low);
+    cpu_idle(cpu);
     carry = value & 1;
     result = (value >> 1) | (cpu->c << 7);
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, result);
   } else {
-    cpu->cyclesUsed += 2; // m = 0: 2 extra cycles
-    uint16_t value = cpu_readWord(cpu, low, high);
+    uint16_t value = cpu_readWord(cpu, low, high, false);
+    cpu_idle(cpu);
     carry = value & 1;
     result = (value >> 1) | (cpu->c << 15);
-    cpu_writeWord(cpu, low, high, result, true);
+    cpu_writeWord(cpu, low, high, result, true, true);
   }
   cpu_setZN(cpu, result, cpu->mf);
   cpu->c = carry;
@@ -626,13 +671,15 @@ static void cpu_rol(Cpu* cpu, uint32_t low, uint32_t high) {
   int result = 0;
   if(cpu->mf) {
     result = (cpu_read(cpu, low) << 1) | cpu->c;
+    cpu_idle(cpu);
     cpu->c = result & 0x100;
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, result);
   } else {
-    cpu->cyclesUsed += 2; // m = 0: 2 extra cycles
-    result = (cpu_readWord(cpu, low, high) << 1) | cpu->c;
+    result = (cpu_readWord(cpu, low, high, false) << 1) | cpu->c;
+    cpu_idle(cpu);
     cpu->c = result & 0x10000;
-    cpu_writeWord(cpu, low, high, result, true);
+    cpu_writeWord(cpu, low, high, result, true, true);
   }
   cpu_setZN(cpu, result, cpu->mf);
 }
@@ -641,15 +688,17 @@ static void cpu_lsr(Cpu* cpu, uint32_t low, uint32_t high) {
   int result = 0;
   if(cpu->mf) {
     uint8_t value = cpu_read(cpu, low);
+    cpu_idle(cpu);
     cpu->c = value & 1;
     result = value >> 1;
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, result);
   } else {
-    cpu->cyclesUsed += 2; // m = 0: 2 extra cycles
-    uint16_t value = cpu_readWord(cpu, low, high);
+    uint16_t value = cpu_readWord(cpu, low, high, false);
+    cpu_idle(cpu);
     cpu->c = value & 1;
     result = value >> 1;
-    cpu_writeWord(cpu, low, high, result, true);
+    cpu_writeWord(cpu, low, high, result, true, true);
   }
   cpu_setZN(cpu, result, cpu->mf);
 }
@@ -658,13 +707,15 @@ static void cpu_asl(Cpu* cpu, uint32_t low, uint32_t high) {
   int result = 0;
   if(cpu->mf) {
     result = cpu_read(cpu, low) << 1;
+    cpu_idle(cpu);
     cpu->c = result & 0x100;
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, result);
   } else {
-    cpu->cyclesUsed += 2; // m = 0: 2 extra cycles
-    result = cpu_readWord(cpu, low, high) << 1;
+    result = cpu_readWord(cpu, low, high, false) << 1;
+    cpu_idle(cpu);
     cpu->c = result & 0x10000;
-    cpu_writeWord(cpu, low, high, result, true);
+    cpu_writeWord(cpu, low, high, result, true, true);
   }
   cpu_setZN(cpu, result, cpu->mf);
 }
@@ -673,11 +724,13 @@ static void cpu_inc(Cpu* cpu, uint32_t low, uint32_t high) {
   int result = 0;
   if(cpu->mf) {
     result = cpu_read(cpu, low) + 1;
+    cpu_idle(cpu);
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, result);
   } else {
-    cpu->cyclesUsed += 2; // m = 0: 2 extra cycles
-    result = cpu_readWord(cpu, low, high) + 1;
-    cpu_writeWord(cpu, low, high, result, true);
+    result = cpu_readWord(cpu, low, high, false) + 1;
+    cpu_idle(cpu);
+    cpu_writeWord(cpu, low, high, result, true, true);
   }
   cpu_setZN(cpu, result, cpu->mf);
 }
@@ -686,11 +739,13 @@ static void cpu_dec(Cpu* cpu, uint32_t low, uint32_t high) {
   int result = 0;
   if(cpu->mf) {
     result = cpu_read(cpu, low) - 1;
+    cpu_idle(cpu);
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, result);
   } else {
-    cpu->cyclesUsed += 2; // m = 0: 2 extra cycles
-    result = cpu_readWord(cpu, low, high) - 1;
-    cpu_writeWord(cpu, low, high, result, true);
+    result = cpu_readWord(cpu, low, high, false) - 1;
+    cpu_idle(cpu);
+    cpu_writeWord(cpu, low, high, result, true, true);
   }
   cpu_setZN(cpu, result, cpu->mf);
 }
@@ -698,40 +753,44 @@ static void cpu_dec(Cpu* cpu, uint32_t low, uint32_t high) {
 static void cpu_tsb(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
     uint8_t value = cpu_read(cpu, low);
+    cpu_idle(cpu);
     cpu->z = ((cpu->a & 0xff) & value) == 0;
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, value | (cpu->a & 0xff));
   } else {
-    cpu->cyclesUsed += 2; // m = 0: 2 extra cycles
-    uint16_t value = cpu_readWord(cpu, low, high);
+    uint16_t value = cpu_readWord(cpu, low, high, false);
+    cpu_idle(cpu);
     cpu->z = (cpu->a & value) == 0;
-    cpu_writeWord(cpu, low, high, value | cpu->a, true);
+    cpu_writeWord(cpu, low, high, value | cpu->a, true, true);
   }
 }
 
 static void cpu_trb(Cpu* cpu, uint32_t low, uint32_t high) {
   if(cpu->mf) {
     uint8_t value = cpu_read(cpu, low);
+    cpu_idle(cpu);
     cpu->z = ((cpu->a & 0xff) & value) == 0;
+    cpu_checkInt(cpu);
     cpu_write(cpu, low, value & ~(cpu->a & 0xff));
   } else {
-    cpu->cyclesUsed += 2; // m = 0: 2 extra cycles
-    uint16_t value = cpu_readWord(cpu, low, high);
+    uint16_t value = cpu_readWord(cpu, low, high, false);
+    cpu_idle(cpu);
     cpu->z = (cpu->a & value) == 0;
-    cpu_writeWord(cpu, low, high, value & ~cpu->a, true);
+    cpu_writeWord(cpu, low, high, value & ~cpu->a, true, true);
   }
 }
 
 static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
   switch(opcode) {
-    case 0x00: { // brk imp
+    case 0x00: { // brk imm(s)
+      cpu_readOpcode(cpu);
       cpu_pushByte(cpu, cpu->k);
-      cpu_pushWord(cpu, cpu->pc + 1);
+      cpu_pushWord(cpu, cpu->pc, false);
       cpu_pushByte(cpu, cpu_getFlags(cpu));
-      cpu->cyclesUsed++; // native mode: 1 extra cycle
       cpu->i = true;
       cpu->d = false;
       cpu->k = 0;
-      cpu->pc = cpu_readWord(cpu, 0xffe6, 0xffe7);
+      cpu->pc = cpu_readWord(cpu, 0xffe6, 0xffe7, true);
       break;
     }
     case 0x01: { // ora idx
@@ -743,13 +802,12 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
     case 0x02: { // cop imm(s)
       cpu_readOpcode(cpu);
       cpu_pushByte(cpu, cpu->k);
-      cpu_pushWord(cpu, cpu->pc);
+      cpu_pushWord(cpu, cpu->pc, false);
       cpu_pushByte(cpu, cpu_getFlags(cpu));
-      cpu->cyclesUsed++; // native mode: 1 extra cycle
       cpu->i = true;
       cpu->d = false;
       cpu->k = 0;
-      cpu->pc = cpu_readWord(cpu, 0xffe4, 0xffe5);
+      cpu->pc = cpu_readWord(cpu, 0xffe4, 0xffe5, true);
       break;
     }
     case 0x03: { // ora sr
@@ -783,6 +841,8 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x08: { // php imp
+      cpu_idle(cpu);
+      cpu_checkInt(cpu);
       cpu_pushByte(cpu, cpu_getFlags(cpu));
       break;
     }
@@ -793,6 +853,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x0a: { // asla imp
+      cpu_adrImp(cpu);
       if(cpu->mf) {
         cpu->c = cpu->a & 0x80;
         cpu->a = (cpu->a & 0xff00) | ((cpu->a << 1) & 0xff);
@@ -804,7 +865,8 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x0b: { // phd imp
-      cpu_pushWord(cpu, cpu->dp);
+      cpu_idle(cpu);
+      cpu_pushWord(cpu, cpu->dp, true);
       break;
     }
     case 0x0c: { // tsb abs
@@ -832,7 +894,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x10: { // bpl rel
-      cpu_doBranch(cpu, cpu_readOpcode(cpu), !cpu->n);
+      cpu_doBranch(cpu, !cpu->n);
       break;
     }
     case 0x11: { // ora idy(r)
@@ -878,6 +940,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x18: { // clc imp
+      cpu_adrImp(cpu);
       cpu->c = false;
       break;
     }
@@ -888,6 +951,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x1a: { // inca imp
+      cpu_adrImp(cpu);
       if(cpu->mf) {
         cpu->a = (cpu->a & 0xff00) | ((cpu->a + 1) & 0xff);
       } else {
@@ -897,6 +961,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x1b: { // tcs imp
+      cpu_adrImp(cpu);
       cpu->sp = cpu->a;
       break;
     }
@@ -925,8 +990,9 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x20: { // jsr abs
-      uint16_t value = cpu_readOpcodeWord(cpu);
-      cpu_pushWord(cpu, cpu->pc - 1);
+      uint16_t value = cpu_readOpcodeWord(cpu, false);
+      cpu_idle(cpu);
+      cpu_pushWord(cpu, cpu->pc - 1, true);
       cpu->pc = value;
       break;
     }
@@ -937,10 +1003,11 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x22: { // jsl abl
-      uint16_t value = cpu_readOpcodeWord(cpu);
-      uint8_t newK = cpu_readOpcode(cpu);
+      uint16_t value = cpu_readOpcodeWord(cpu, false);
       cpu_pushByte(cpu, cpu->k);
-      cpu_pushWord(cpu, cpu->pc - 1);
+      cpu_idle(cpu);
+      uint8_t newK = cpu_readOpcode(cpu);
+      cpu_pushWord(cpu, cpu->pc - 1, true);
       cpu->pc = value;
       cpu->k = newK;
       break;
@@ -976,6 +1043,9 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x28: { // plp imp
+      cpu_idle(cpu);
+      cpu_idle(cpu);
+      cpu_checkInt(cpu);
       cpu_setFlags(cpu, cpu_pullByte(cpu));
       break;
     }
@@ -986,6 +1056,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x2a: { // rola imp
+      cpu_adrImp(cpu);
       int result = (cpu->a << 1) | cpu->c;
       if(cpu->mf) {
         cpu->c = result & 0x100;
@@ -998,7 +1069,9 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x2b: { // pld imp
-      cpu->dp = cpu_pullWord(cpu);
+      cpu_idle(cpu);
+      cpu_idle(cpu);
+      cpu->dp = cpu_pullWord(cpu, true);
       cpu_setZN(cpu, cpu->dp, false);
       break;
     }
@@ -1027,7 +1100,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x30: { // bmi rel
-      cpu_doBranch(cpu, cpu_readOpcode(cpu), cpu->n);
+      cpu_doBranch(cpu, cpu->n);
       break;
     }
     case 0x31: { // and idy(r)
@@ -1073,6 +1146,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x38: { // sec imp
+      cpu_adrImp(cpu);
       cpu->c = true;
       break;
     }
@@ -1083,6 +1157,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x3a: { // deca imp
+      cpu_adrImp(cpu);
       if(cpu->mf) {
         cpu->a = (cpu->a & 0xff00) | ((cpu->a - 1) & 0xff);
       } else {
@@ -1092,6 +1167,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x3b: { // tsc imp
+      cpu_adrImp(cpu);
       cpu->a = cpu->sp;
       cpu_setZN(cpu, cpu->a, false);
       break;
@@ -1121,9 +1197,11 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x40: { // rti imp
+      cpu_idle(cpu);
+      cpu_idle(cpu);
       cpu_setFlags(cpu, cpu_pullByte(cpu));
-      cpu->cyclesUsed++; // native mode: 1 extra cycle
-      cpu->pc = cpu_pullWord(cpu);
+      cpu->pc = cpu_pullWord(cpu, false);
+      cpu_checkInt(cpu);
       cpu->k = cpu_pullByte(cpu);
       break;
     }
@@ -1134,6 +1212,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x42: { // wdm imm(s)
+      cpu_checkInt(cpu);
       cpu_readOpcode(cpu);
       break;
     }
@@ -1158,6 +1237,9 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
         cpu->x &= 0xff;
         cpu->y &= 0xff;
       }
+      cpu_idle(cpu);
+      cpu_checkInt(cpu);
+      cpu_idle(cpu);
       break;
     }
     case 0x45: { // eor dp
@@ -1179,11 +1261,12 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x48: { // pha imp
+      cpu_idle(cpu);
       if(cpu->mf) {
+        cpu_checkInt(cpu);
         cpu_pushByte(cpu, cpu->a);
       } else {
-        cpu->cyclesUsed++; // m = 0: 1 extra cycle
-        cpu_pushWord(cpu, cpu->a);
+        cpu_pushWord(cpu, cpu->a, true);
       }
       break;
     }
@@ -1194,6 +1277,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x4a: { // lsra imp
+      cpu_adrImp(cpu);
       cpu->c = cpu->a & 1;
       if(cpu->mf) {
         cpu->a = (cpu->a & 0xff00) | ((cpu->a >> 1) & 0x7f);
@@ -1204,11 +1288,13 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x4b: { // phk imp
+      cpu_idle(cpu);
+      cpu_checkInt(cpu);
       cpu_pushByte(cpu, cpu->k);
       break;
     }
     case 0x4c: { // jmp abs
-      cpu->pc = cpu_readOpcodeWord(cpu);
+      cpu->pc = cpu_readOpcodeWord(cpu, true);
       break;
     }
     case 0x4d: { // eor abs
@@ -1230,7 +1316,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x50: { // bvc rel
-      cpu_doBranch(cpu, cpu_readOpcode(cpu), !cpu->v);
+      cpu_doBranch(cpu, !cpu->v);
       break;
     }
     case 0x51: { // eor idy(r)
@@ -1266,6 +1352,9 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
         cpu->x &= 0xff;
         cpu->y &= 0xff;
       }
+      cpu_idle(cpu);
+      cpu_checkInt(cpu);
+      cpu_idle(cpu);
       break;
     }
     case 0x55: { // eor dpx
@@ -1287,6 +1376,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x58: { // cli imp
+      cpu_adrImp(cpu);
       cpu->i = false;
       break;
     }
@@ -1297,21 +1387,24 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x5a: { // phy imp
+      cpu_idle(cpu);
       if(cpu->xf) {
+        cpu_checkInt(cpu);
         cpu_pushByte(cpu, cpu->y);
       } else {
-        cpu->cyclesUsed++; // m = 0: 1 extra cycle
-        cpu_pushWord(cpu, cpu->y);
+        cpu_pushWord(cpu, cpu->y, true);
       }
       break;
     }
     case 0x5b: { // tcd imp
+      cpu_adrImp(cpu);
       cpu->dp = cpu->a;
       cpu_setZN(cpu, cpu->dp, false);
       break;
     }
     case 0x5c: { // jml abl
-      uint16_t value = cpu_readOpcodeWord(cpu);
+      uint16_t value = cpu_readOpcodeWord(cpu, false);
+      cpu_checkInt(cpu);
       cpu->k = cpu_readOpcode(cpu);
       cpu->pc = value;
       break;
@@ -1335,7 +1428,11 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x60: { // rts imp
-      cpu->pc = cpu_pullWord(cpu) + 1;
+      cpu_idle(cpu);
+      cpu_idle(cpu);
+      cpu->pc = cpu_pullWord(cpu, false) + 1;
+      cpu_checkInt(cpu);
+      cpu_idle(cpu);
       break;
     }
     case 0x61: { // adc idx
@@ -1345,8 +1442,9 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x62: { // per rll
-      uint16_t value = cpu_readOpcodeWord(cpu);
-      cpu_pushWord(cpu, cpu->pc + (int16_t) value);
+      uint16_t value = cpu_readOpcodeWord(cpu, false);
+      cpu_idle(cpu);
+      cpu_pushWord(cpu, cpu->pc + (int16_t) value, true);
       break;
     }
     case 0x63: { // adc sr
@@ -1380,11 +1478,13 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x68: { // pla imp
+      cpu_idle(cpu);
+      cpu_idle(cpu);
       if(cpu->mf) {
+        cpu_checkInt(cpu);
         cpu->a = (cpu->a & 0xff00) | cpu_pullByte(cpu);
       } else {
-        cpu->cyclesUsed++; // 16-bit m: 1 extra cycle
-        cpu->a = cpu_pullWord(cpu);
+        cpu->a = cpu_pullWord(cpu, true);
       }
       cpu_setZN(cpu, cpu->a, cpu->mf);
       break;
@@ -1396,6 +1496,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x6a: { // rora imp
+      cpu_adrImp(cpu);
       bool carry = cpu->a & 1;
       if(cpu->mf) {
         cpu->a = (cpu->a & 0xff00) | ((cpu->a >> 1) & 0x7f) | (cpu->c << 7);
@@ -1407,13 +1508,16 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x6b: { // rtl imp
-      cpu->pc = cpu_pullWord(cpu) + 1;
+      cpu_idle(cpu);
+      cpu_idle(cpu);
+      cpu->pc = cpu_pullWord(cpu, false) + 1;
+      cpu_checkInt(cpu);
       cpu->k = cpu_pullByte(cpu);
       break;
     }
     case 0x6c: { // jmp ind
-      uint16_t adr = cpu_readOpcodeWord(cpu);
-      cpu->pc = cpu_readWord(cpu, adr, (adr + 1) & 0xffff);
+      uint16_t adr = cpu_readOpcodeWord(cpu, false);
+      cpu->pc = cpu_readWord(cpu, adr, (adr + 1) & 0xffff, true);
       break;
     }
     case 0x6d: { // adc abs
@@ -1435,7 +1539,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x70: { // bvs rel
-      cpu_doBranch(cpu, cpu_readOpcode(cpu), cpu->v);
+      cpu_doBranch(cpu, cpu->v);
       break;
     }
     case 0x71: { // adc idy(r)
@@ -1481,6 +1585,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x78: { // sei imp
+      cpu_adrImp(cpu);
       cpu->i = true;
       break;
     }
@@ -1491,22 +1596,27 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x7a: { // ply imp
+      cpu_idle(cpu);
+      cpu_idle(cpu);
       if(cpu->xf) {
+        cpu_checkInt(cpu);
         cpu->y = cpu_pullByte(cpu);
       } else {
-        cpu->cyclesUsed++; // 16-bit x: 1 extra cycle
-        cpu->y = cpu_pullWord(cpu);
+        cpu->y = cpu_pullWord(cpu, true);
       }
       cpu_setZN(cpu, cpu->y, cpu->xf);
       break;
     }
     case 0x7b: { // tdc imp
+      cpu_adrImp(cpu);
       cpu->a = cpu->dp;
       cpu_setZN(cpu, cpu->a, false);
       break;
     }
     case 0x7c: { // jmp iax
-      cpu->pc = cpu_adrIax(cpu);
+      uint16_t adr = cpu_readOpcodeWord(cpu, false);
+      cpu_idle(cpu);
+      cpu->pc = cpu_readWord(cpu, (cpu->k << 16) | ((adr + cpu->x) & 0xffff), (cpu->k << 16) | ((adr + cpu->x + 1) & 0xffff), true);
       break;
     }
     case 0x7d: { // adc abx(r)
@@ -1528,7 +1638,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x80: { // bra rel
-      cpu->pc += (int8_t) cpu_readOpcode(cpu);
+      cpu_doBranch(cpu, true);
       break;
     }
     case 0x81: { // sta idx
@@ -1538,7 +1648,9 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x82: { // brl rll
-      cpu->pc += (int16_t) cpu_readOpcodeWord(cpu);
+      cpu->pc += (int16_t) cpu_readOpcodeWord(cpu, false);
+      cpu_checkInt(cpu);
+      cpu_idle(cpu);
       break;
     }
     case 0x83: { // sta sr
@@ -1572,6 +1684,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x88: { // dey imp
+      cpu_adrImp(cpu);
       if(cpu->xf) {
         cpu->y = (cpu->y - 1) & 0xff;
       } else {
@@ -1582,16 +1695,17 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
     }
     case 0x89: { // biti imm(m)
       if(cpu->mf) {
+        cpu_checkInt(cpu);
         uint8_t result = (cpu->a & 0xff) & cpu_readOpcode(cpu);
         cpu->z = result == 0;
       } else {
-        cpu->cyclesUsed++; // m = 0: 1 extra cycle
-        uint16_t result = cpu->a & cpu_readOpcodeWord(cpu);
+        uint16_t result = cpu->a & cpu_readOpcodeWord(cpu, true);
         cpu->z = result == 0;
       }
       break;
     }
     case 0x8a: { // txa imp
+      cpu_adrImp(cpu);
       if(cpu->mf) {
         cpu->a = (cpu->a & 0xff00) | (cpu->x & 0xff);
       } else {
@@ -1601,6 +1715,8 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x8b: { // phb imp
+      cpu_idle(cpu);
+      cpu_checkInt(cpu);
       cpu_pushByte(cpu, cpu->db);
       break;
     }
@@ -1629,7 +1745,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x90: { // bcc rel
-      cpu_doBranch(cpu, cpu_readOpcode(cpu), !cpu->c);
+      cpu_doBranch(cpu, !cpu->c);
       break;
     }
     case 0x91: { // sta idy
@@ -1675,6 +1791,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x98: { // tya imp
+      cpu_adrImp(cpu);
       if(cpu->mf) {
         cpu->a = (cpu->a & 0xff00) | (cpu->y & 0xff);
       } else {
@@ -1690,10 +1807,12 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0x9a: { // txs imp
+      cpu_adrImp(cpu);
       cpu->sp = cpu->x;
       break;
     }
     case 0x9b: { // txy imp
+      cpu_adrImp(cpu);
       if(cpu->xf) {
         cpu->y = cpu->x & 0xff;
       } else {
@@ -1775,6 +1894,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xa8: { // tay imp
+      cpu_adrImp(cpu);
       if(cpu->xf) {
         cpu->y = cpu->a & 0xff;
       } else {
@@ -1790,6 +1910,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xaa: { // tax imp
+      cpu_adrImp(cpu);
       if(cpu->xf) {
         cpu->x = cpu->a & 0xff;
       } else {
@@ -1799,6 +1920,9 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xab: { // plb imp
+      cpu_idle(cpu);
+      cpu_idle(cpu);
+      cpu_checkInt(cpu);
       cpu->db = cpu_pullByte(cpu);
       cpu_setZN(cpu, cpu->db, true);
       break;
@@ -1828,7 +1952,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xb0: { // bcs rel
-      cpu_doBranch(cpu, cpu_readOpcode(cpu), cpu->c);
+      cpu_doBranch(cpu, cpu->c);
       break;
     }
     case 0xb1: { // lda idy(r)
@@ -1874,6 +1998,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xb8: { // clv imp
+      cpu_adrImp(cpu);
       cpu->v = false;
       break;
     }
@@ -1884,6 +2009,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xba: { // tsx imp
+      cpu_adrImp(cpu);
       if(cpu->xf) {
         cpu->x = cpu->sp & 0xff;
       } else {
@@ -1893,6 +2019,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xbb: { // tyx imp
+      cpu_adrImp(cpu);
       if(cpu->xf) {
         cpu->x = cpu->y & 0xff;
       } else {
@@ -1938,7 +2065,10 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xc2: { // rep imm(s)
-      cpu_setFlags(cpu, cpu_getFlags(cpu) & ~cpu_readOpcode(cpu));
+      uint8_t val = cpu_readOpcode(cpu);
+      cpu_checkInt(cpu);
+      cpu_setFlags(cpu, cpu_getFlags(cpu) & ~val);
+      cpu_idle(cpu);
       break;
     }
     case 0xc3: { // cmp sr
@@ -1972,6 +2102,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xc8: { // iny imp
+      cpu_adrImp(cpu);
       if(cpu->xf) {
         cpu->y = (cpu->y + 1) & 0xff;
       } else {
@@ -1987,6 +2118,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xca: { // dex imp
+      cpu_adrImp(cpu);
       if(cpu->xf) {
         cpu->x = (cpu->x - 1) & 0xff;
       } else {
@@ -1997,6 +2129,8 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
     }
     case 0xcb: { // wai imp
       cpu->waiting = true;
+      cpu_idle(cpu);
+      cpu_idle(cpu);
       break;
     }
     case 0xcc: { // cpy abs
@@ -2024,7 +2158,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xd0: { // bne rel
-      cpu_doBranch(cpu, cpu_readOpcode(cpu), !cpu->z);
+      cpu_doBranch(cpu, !cpu->z);
       break;
     }
     case 0xd1: { // cmp idy(r)
@@ -2048,7 +2182,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
     case 0xd4: { // pei dp
       uint32_t low = 0;
       uint32_t high = cpu_adrDp(cpu, &low);
-      cpu_pushWord(cpu, cpu_readWord(cpu, low, high));
+      cpu_pushWord(cpu, cpu_readWord(cpu, low, high, false), true);
       break;
     }
     case 0xd5: { // cmp dpx
@@ -2070,6 +2204,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xd8: { // cld imp
+      cpu_adrImp(cpu);
       cpu->d = false;
       break;
     }
@@ -2080,21 +2215,25 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xda: { // phx imp
+      cpu_idle(cpu);
       if(cpu->xf) {
+        cpu_checkInt(cpu);
         cpu_pushByte(cpu, cpu->x);
       } else {
-        cpu->cyclesUsed++; // m = 0: 1 extra cycle
-        cpu_pushWord(cpu, cpu->x);
+        cpu_pushWord(cpu, cpu->x, true);
       }
       break;
     }
     case 0xdb: { // stp imp
       cpu->stopped = true;
+      cpu_idle(cpu);
+      cpu_idle(cpu);
       break;
     }
     case 0xdc: { // jml ial
-      uint16_t adr = cpu_readOpcodeWord(cpu);
-      cpu->pc = cpu_readWord(cpu, adr, (adr + 1) & 0xffff);
+      uint16_t adr = cpu_readOpcodeWord(cpu, false);
+      cpu->pc = cpu_readWord(cpu, adr, (adr + 1) & 0xffff, false);
+      cpu_checkInt(cpu);
       cpu->k = cpu_read(cpu, (adr + 2) & 0xffff);
       break;
     }
@@ -2129,7 +2268,10 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xe2: { // sep imm(s)
-      cpu_setFlags(cpu, cpu_getFlags(cpu) | cpu_readOpcode(cpu));
+      uint8_t val = cpu_readOpcode(cpu);
+      cpu_checkInt(cpu);
+      cpu_setFlags(cpu, cpu_getFlags(cpu) | val);
+      cpu_idle(cpu);
       break;
     }
     case 0xe3: { // sbc sr
@@ -2163,6 +2305,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xe8: { // inx imp
+      cpu_adrImp(cpu);
       if(cpu->xf) {
         cpu->x = (cpu->x + 1) & 0xff;
       } else {
@@ -2178,6 +2321,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xea: { // nop imp
+      cpu_adrImp(cpu);
       // no operation
       break;
     }
@@ -2186,6 +2330,9 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       uint8_t high = cpu->a >> 8;
       cpu->a = (low << 8) | high;
       cpu_setZN(cpu, high, true);
+      cpu_idle(cpu);
+      cpu_checkInt(cpu);
+      cpu_idle(cpu);
       break;
     }
     case 0xec: { // cpx abs
@@ -2213,7 +2360,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xf0: { // beq rel
-      cpu_doBranch(cpu, cpu_readOpcode(cpu), cpu->z);
+      cpu_doBranch(cpu, cpu->z);
       break;
     }
     case 0xf1: { // sbc idy(r)
@@ -2235,7 +2382,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xf4: { // pea imm(l)
-      cpu_pushWord(cpu, cpu_readOpcodeWord(cpu));
+      cpu_pushWord(cpu, cpu_readOpcodeWord(cpu, false), true);
       break;
     }
     case 0xf5: { // sbc dpx
@@ -2257,6 +2404,7 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xf8: { // sed imp
+      cpu_adrImp(cpu);
       cpu->d = true;
       break;
     }
@@ -2267,16 +2415,19 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xfa: { // plx imp
+      cpu_idle(cpu);
+      cpu_idle(cpu);
       if(cpu->xf) {
+        cpu_checkInt(cpu);
         cpu->x = cpu_pullByte(cpu);
       } else {
-        cpu->cyclesUsed++; // 16-bit x: 1 extra cycle
-        cpu->x = cpu_pullWord(cpu);
+        cpu->x = cpu_pullWord(cpu, true);
       }
       cpu_setZN(cpu, cpu->x, cpu->xf);
       break;
     }
     case 0xfb: { // xce imp
+      cpu_adrImp(cpu);
       bool temp = cpu->c;
       cpu->c = cpu->e;
       cpu->e = temp;
@@ -2284,8 +2435,11 @@ static void cpu_doOpcode(Cpu* cpu, uint8_t opcode) {
       break;
     }
     case 0xfc: { // jsr iax
-      uint16_t value = cpu_adrIax(cpu);
-      cpu_pushWord(cpu, cpu->pc - 1);
+      uint8_t adrl = cpu_readOpcode(cpu);
+      cpu_pushWord(cpu, cpu->pc, false);
+      uint16_t adr = adrl | (cpu_readOpcode(cpu) << 8);
+      cpu_idle(cpu);
+      uint16_t value = cpu_readWord(cpu, (cpu->k << 16) | ((adr + cpu->x) & 0xffff), (cpu->k << 16) | ((adr + cpu->x + 1) & 0xffff), true);
       cpu->pc = value;
       break;
     }

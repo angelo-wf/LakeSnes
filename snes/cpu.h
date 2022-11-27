@@ -2,18 +2,21 @@
 #ifndef CPU_H
 #define CPU_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+
+typedef uint8_t (*CpuReadHandler)(void* mem, uint32_t adr);
+typedef void (*CpuWriteHandler)(void* mem, uint32_t adr, uint8_t val);
+typedef void (*CpuIdleHandler)(void* mem, bool waiting);
 
 typedef struct Cpu Cpu;
 
 struct Cpu {
-  // reference to memory handler, for reading//writing
+  // reference to memory handler, pointers to read/write/idle handlers
   void* mem;
-  uint8_t memType; // used to define which type mem is
+  CpuReadHandler read;
+  CpuWriteHandler write;
+  CpuIdleHandler idle;
   // registers
   uint16_t a;
   uint16_t x;
@@ -33,19 +36,21 @@ struct Cpu {
   bool xf;
   bool mf;
   bool e;
-  // interrupts
-  bool irqWanted;
-  bool nmiWanted;
   // power state (WAI/STP)
   bool waiting;
   bool stopped;
-  // internal use
-  uint8_t cyclesUsed; // indicates how many cycles an opcode used
+  // interrupts
+  bool irqWanted;
+  bool nmiWanted;
+  bool intWanted;
+  bool resetWanted;
 };
 
-Cpu* cpu_init(void* mem, int memType);
+Cpu* cpu_init(void* mem, CpuReadHandler read, CpuWriteHandler write, CpuIdleHandler idle);
 void cpu_free(Cpu* cpu);
-void cpu_reset(Cpu* cpu);
-int cpu_runOpcode(Cpu* cpu);
+void cpu_reset(Cpu* cpu, bool hard);
+void cpu_runOpcode(Cpu* cpu);
+void cpu_nmi(Cpu* cpu);
+void cpu_setIrq(Cpu* cpu, bool state);
 
 #endif

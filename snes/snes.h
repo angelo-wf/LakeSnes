@@ -2,9 +2,6 @@
 #ifndef SNES_H
 #define SNES_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -35,7 +32,6 @@ struct Snes {
   uint32_t frames;
   // cpu handling
   uint8_t cpuCyclesLeft;
-  uint8_t cpuMemOps;
   double apuCatchupCycles;
   // nmi / irq
   bool hIrqEnabled;
@@ -70,8 +66,9 @@ uint8_t snes_readBBus(Snes* snes, uint8_t adr);
 void snes_writeBBus(Snes* snes, uint8_t adr, uint8_t val);
 uint8_t snes_read(Snes* snes, uint32_t adr);
 void snes_write(Snes* snes, uint32_t adr, uint8_t val);
-uint8_t snes_cpuRead(Snes* snes, uint32_t adr);
-void snes_cpuWrite(Snes* snes, uint32_t adr, uint8_t val);
+void snes_cpuIdle(void* mem, bool waiting);
+uint8_t snes_cpuRead(void* mem, uint32_t adr);
+void snes_cpuWrite(void* mem, uint32_t adr, uint8_t val);
 // debugging
 void snes_debugCycle(Snes* snes, bool* cpuNext, bool* spcNext);
 

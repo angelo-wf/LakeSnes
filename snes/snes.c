@@ -26,7 +26,7 @@ static int snes_getAccessTime(Snes* snes, uint32_t adr);
 
 Snes* snes_init(void) {
   Snes* snes = malloc(sizeof(Snes));
-  snes->cpu = cpu_init(snes, 0);
+  snes->cpu = cpu_init(snes, snes_cpuRead, snes_cpuWrite, snes_cpuIdle);
   snes->apu = apu_init(snes);
   snes->dma = dma_init(snes);
   snes->ppu = ppu_init(snes);
@@ -48,20 +48,19 @@ void snes_free(Snes* snes) {
 }
 
 void snes_reset(Snes* snes, bool hard) {
-  cart_reset(snes->cart); // reset cart first, because resetting cpu will read from it (reset vector)
-  cpu_reset(snes->cpu);
+  cpu_reset(snes->cpu, hard);
   apu_reset(snes->apu);
   dma_reset(snes->dma);
   ppu_reset(snes->ppu);
   input_reset(snes->input1);
   input_reset(snes->input2);
+  cart_reset(snes->cart);
   if(hard) memset(snes->ram, 0, sizeof(snes->ram));
   snes->ramAdr = 0;
   snes->hPos = 0;
   snes->vPos = 0;
   snes->frames = 0;
-  snes->cpuCyclesLeft = 52; // 5 reads (8) + 2 IntOp (6)
-  snes->cpuMemOps = 0;
+  snes->cpuCyclesLeft = 0;
   snes->apuCatchupCycles = 0.0;
   snes->hIrqEnabled = false;
   snes->vIrqEnabled = false;
@@ -104,17 +103,17 @@ static void snes_runCycle(Snes* snes) {
   if(snes->vIrqEnabled && snes->hIrqEnabled) {
     if(snes->vPos == snes->vTimer && snes->hPos == (4 * snes->hTimer)) {
       snes->inIrq = true;
-      snes->cpu->irqWanted = true; // request IRQ on CPU
+      cpu_setIrq(snes->cpu, true);
     }
   } else if(snes->vIrqEnabled && !snes->hIrqEnabled) {
     if(snes->vPos == snes->vTimer && snes->hPos == 0) {
       snes->inIrq = true;
-      snes->cpu->irqWanted = true; // request IRQ on CPU
+      cpu_setIrq(snes->cpu, true);
     }
   } else if(!snes->vIrqEnabled && snes->hIrqEnabled) {
     if(snes->hPos == (4 * snes->hTimer)) {
       snes->inIrq = true;
-      snes->cpu->irqWanted = true; // request IRQ on CPU
+      cpu_setIrq(snes->cpu, true);
     }
   }
   // handle positional stuff
@@ -145,7 +144,7 @@ static void snes_runCycle(Snes* snes) {
         snes_doAutoJoypad(snes);
       }
       if(snes->nmiEnabled) {
-        snes->cpu->nmiWanted = true; // request NMI on CPU
+        cpu_nmi(snes->cpu);
       }
     }
   } else if(snes->hPos == 512) {
@@ -174,9 +173,7 @@ static void snes_runCycle(Snes* snes) {
 
 static void snes_runCpu(Snes* snes) {
   if(snes->cpuCyclesLeft == 0) {
-    snes->cpuMemOps = 0;
-    int cycles = cpu_runOpcode(snes->cpu);
-    snes->cpuCyclesLeft += (cycles - snes->cpuMemOps) * 6;
+    cpu_runOpcode(snes->cpu);
   }
   snes->cpuCyclesLeft -= 2;
 }
@@ -266,7 +263,7 @@ static uint8_t snes_readReg(Snes* snes, uint16_t adr) {
     case 0x4211: {
       uint8_t val = snes->inIrq << 7;
       snes->inIrq = false;
-      snes->cpu->irqWanted = false;
+      cpu_setIrq(snes->cpu, false);
       return val | (snes->openBus & 0x7f);
     }
     case 0x4212: {
@@ -318,7 +315,7 @@ static void snes_writeReg(Snes* snes, uint16_t adr, uint8_t val) {
       snes->nmiEnabled = val & 0x80;
       if(!snes->hIrqEnabled && !snes->vIrqEnabled) {
         snes->inIrq = false;
-        snes->cpu->irqWanted = false;
+        cpu_setIrq(snes->cpu, false);
       }
       // TODO: enabling nmi during vblank with inNmi still set generates nmi
       //   enabling virq (and not h) on the vPos that vTimer is at generates irq (?)
@@ -486,14 +483,19 @@ uint8_t snes_read(Snes* snes, uint32_t adr) {
   return val;
 }
 
-uint8_t snes_cpuRead(Snes* snes, uint32_t adr) {
-  snes->cpuMemOps++;
+void snes_cpuIdle(void* mem, bool waiting) {
+  Snes* snes = (Snes*) mem;
+  snes->cpuCyclesLeft += 6;
+}
+
+uint8_t snes_cpuRead(void* mem, uint32_t adr) {
+  Snes* snes = (Snes*) mem;
   snes->cpuCyclesLeft += snes_getAccessTime(snes, adr);
   return snes_read(snes, adr);
 }
 
-void snes_cpuWrite(Snes* snes, uint32_t adr, uint8_t val) {
-  snes->cpuMemOps++;
+void snes_cpuWrite(void* mem, uint32_t adr, uint8_t val) {
+  Snes* snes = (Snes*) mem;
   snes->cpuCyclesLeft += snes_getAccessTime(snes, adr);
   snes_write(snes, adr, val);
 }

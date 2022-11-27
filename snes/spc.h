@@ -2,18 +2,21 @@
 #ifndef SPC_H
 #define SPC_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
 
+typedef uint8_t (*SpcReadHandler)(void* mem, uint16_t adr);
+typedef void (*SpcWriteHandler)(void* mem, uint16_t adr, uint8_t val);
+typedef void (*SpcIdleHandler)(void* mem, bool waiting);
+
 typedef struct Spc Spc;
 
-#include "apu.h"
-
 struct Spc {
-  Apu* apu;
+  // reference to memory handler, pointers to read/write/idle handlers
+  void* mem;
+  SpcReadHandler read;
+  SpcWriteHandler write;
+  SpcIdleHandler idle;
   // registers
   uint8_t a;
   uint8_t x;
@@ -31,13 +34,13 @@ struct Spc {
   bool b;
   // stopping
   bool stopped;
-  // internal use
-  uint8_t cyclesUsed; // indicates how many cycles an opcode used
+  // reset
+  bool resetWanted;
 };
 
-Spc* spc_init(Apu* apu);
+Spc* spc_init(void* mem, SpcReadHandler read, SpcWriteHandler write, SpcIdleHandler idle);
 void spc_free(Spc* spc);
-void spc_reset(Spc* spc);
-int spc_runOpcode(Spc* spc);
+void spc_reset(Spc* spc, bool hard);
+void spc_runOpcode(Spc* spc);
 
 #endif

@@ -2,9 +2,6 @@
 #ifndef APU_H
 #define APU_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -40,7 +37,10 @@ Apu* apu_init(Snes* snes);
 void apu_free(Apu* apu);
 void apu_reset(Apu* apu);
 void apu_cycle(Apu* apu);
-uint8_t apu_cpuRead(Apu* apu, uint16_t adr);
-void apu_cpuWrite(Apu* apu, uint16_t adr, uint8_t val);
+uint8_t apu_read(Apu* apu, uint16_t adr);
+void apu_write(Apu* apu, uint16_t adr, uint8_t val);
+uint8_t apu_spcRead(void* mem, uint16_t adr);
+void apu_spcWrite(void* mem, uint16_t adr, uint8_t val);
+void apu_spcIdle(void* mem, bool waiting);
 
 #endif

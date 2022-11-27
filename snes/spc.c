@@ -6,29 +6,11 @@
 #include <stdbool.h>
 
 #include "spc.h"
-#include "apu.h"
-
-static const int cyclesPerOpcode[256] = {
-  2, 8, 4, 5, 3, 4, 3, 6, 2, 6, 5, 4, 5, 4, 6, 8,
-  2, 8, 4, 5, 4, 5, 5, 6, 5, 5, 6, 5, 2, 2, 4, 6,
-  2, 8, 4, 5, 3, 4, 3, 6, 2, 6, 5, 4, 5, 4, 5, 4,
-  2, 8, 4, 5, 4, 5, 5, 6, 5, 5, 6, 5, 2, 2, 3, 8,
-  2, 8, 4, 5, 3, 4, 3, 6, 2, 6, 4, 4, 5, 4, 6, 6,
-  2, 8, 4, 5, 4, 5, 5, 6, 5, 5, 4, 5, 2, 2, 4, 3,
-  2, 8, 4, 5, 3, 4, 3, 6, 2, 6, 4, 4, 5, 4, 5, 5,
-  2, 8, 4, 5, 4, 5, 5, 6, 5, 5, 5, 5, 2, 2, 3, 6,
-  2, 8, 4, 5, 3, 4, 3, 6, 2, 6, 5, 4, 5, 2, 4, 5,
-  2, 8, 4, 5, 4, 5, 5, 6, 5, 5, 5, 5, 2, 2, 12,5,
-  2, 8, 4, 5, 3, 4, 3, 6, 2, 6, 4, 4, 5, 2, 4, 4,
-  2, 8, 4, 5, 4, 5, 5, 6, 5, 5, 5, 5, 2, 2, 3, 4,
-  2, 8, 4, 5, 4, 5, 4, 7, 2, 5, 6, 4, 5, 2, 4, 9,
-  2, 8, 4, 5, 5, 6, 6, 7, 4, 5, 5, 5, 2, 2, 6, 3,
-  2, 8, 4, 5, 3, 4, 3, 6, 2, 4, 5, 3, 4, 3, 4, 3,
-  2, 8, 4, 5, 4, 5, 5, 6, 3, 4, 5, 4, 2, 2, 4, 3
-};
 
 static uint8_t spc_read(Spc* spc, uint16_t adr);
 static void spc_write(Spc* spc, uint16_t adr, uint8_t val);
+static void spc_idle(Spc* spc);
+static void spc_idleWait(Spc* spc);
 static uint8_t spc_readOpcode(Spc* spc);
 static uint16_t spc_readOpcodeWord(Spc* spc);
 static uint8_t spc_getFlags(Spc* spc);
@@ -45,17 +27,12 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode);
 
 // addressing modes and opcode functions not declared, only used after defintions
 
-static uint8_t spc_read(Spc* spc, uint16_t adr) {
-  return apu_cpuRead(spc->apu, adr);
-}
-
-static void spc_write(Spc* spc, uint16_t adr, uint8_t val) {
-  apu_cpuWrite(spc->apu, adr, val);
-}
-
-Spc* spc_init(Apu* apu) {
+Spc* spc_init(void* mem, SpcReadHandler read, SpcWriteHandler write, SpcIdleHandler idle) {
   Spc* spc = malloc(sizeof(Spc));
-  spc->apu = apu;
+  spc->mem = mem;
+  spc->read = read;
+  spc->write = write;
+  spc->idle = idle;
   return spc;
 }
 
@@ -63,31 +40,62 @@ void spc_free(Spc* spc) {
   free(spc);
 }
 
-void spc_reset(Spc* spc) {
-  spc->a = 0;
-  spc->x = 0;
-  spc->y = 0;
-  spc->sp = 0;
-  spc->pc = spc_read(spc, 0xfffe) | (spc_read(spc, 0xffff) << 8);
-  spc->c = false;
-  spc->z = false;
-  spc->v = false;
-  spc->n = false;
-  spc->i = false;
-  spc->h = false;
-  spc->p = false;
-  spc->b = false;
+void spc_reset(Spc* spc, bool hard) {
+  if(hard) {
+    spc->a = 0;
+    spc->x = 0;
+    spc->y = 0;
+    spc->sp = 0;
+    spc->pc = 0;
+    spc->c = false;
+    spc->z = false;
+    spc->v = false;
+    spc->n = false;
+    spc->i = false;
+    spc->h = false;
+    spc->p = false;
+    spc->b = false;
+  }
   spc->stopped = false;
-  spc->cyclesUsed = 0;
+  spc->resetWanted = true;
 }
 
-int spc_runOpcode(Spc* spc) {
-  spc->cyclesUsed = 0;
-  if(spc->stopped) return 1;
+void spc_runOpcode(Spc* spc) {
+  if(spc->resetWanted) {
+    // based on 6502, brk without writes
+    spc->resetWanted = false;
+    spc_read(spc, spc->pc);
+    spc_read(spc, spc->pc);
+    spc_read(spc, 0x100 | spc->sp--);
+    spc_read(spc, 0x100 | spc->sp--);
+    spc_read(spc, 0x100 | spc->sp--);
+    spc_idle(spc);
+    spc->i = false;
+    spc->pc = spc_readWord(spc, 0xfffe, 0xffff);
+    return;
+  }
+  if(spc->stopped) {
+    spc_idleWait(spc);
+    return;
+  }
   uint8_t opcode = spc_readOpcode(spc);
-  spc->cyclesUsed = cyclesPerOpcode[opcode];
   spc_doOpcode(spc, opcode);
-  return spc->cyclesUsed;
+}
+
+static uint8_t spc_read(Spc* spc, uint16_t adr) {
+  return spc->read(spc->mem, adr);
+}
+
+static void spc_write(Spc* spc, uint16_t adr, uint8_t val) {
+  spc->write(spc->mem, adr, val);
+}
+
+static void spc_idle(Spc* spc) {
+  spc->idle(spc->mem, false);
+}
+
+static void spc_idleWait(Spc* spc) {
+  spc->idle(spc->mem, true);
 }
 
 static uint8_t spc_readOpcode(Spc* spc) {
@@ -129,7 +137,9 @@ static void spc_setZN(Spc* spc, uint8_t value) {
 
 static void spc_doBranch(Spc* spc, uint8_t value, bool check) {
   if(check) {
-    spc->cyclesUsed += 2; // taken branch: 2 extra cycles
+    // taken branch: 2 extra cycles
+    spc_idle(spc);
+    spc_idle(spc);
     spc->pc += (int8_t) value;
   }
 }
@@ -175,11 +185,13 @@ static uint16_t spc_adrAbs(Spc* spc) {
 }
 
 static uint16_t spc_adrInd(Spc* spc) {
+  spc_read(spc, spc->pc);
   return spc->x | (spc->p << 8);
 }
 
 static uint16_t spc_adrIdx(Spc* spc) {
   uint8_t pointer = spc_readOpcode(spc);
+  spc_idle(spc);
   return spc_readWord(spc, ((pointer + spc->x) & 0xff) | (spc->p << 8), ((pointer + spc->x + 1) & 0xff) | (spc->p << 8));
 }
 
@@ -188,39 +200,49 @@ static uint16_t spc_adrImm(Spc* spc) {
 }
 
 static uint16_t spc_adrDpx(Spc* spc) {
-  return ((spc_readOpcode(spc) + spc->x) & 0xff) | (spc->p << 8);
+  uint16_t res = ((spc_readOpcode(spc) + spc->x) & 0xff) | (spc->p << 8);
+  spc_idle(spc);
+  return res;
 }
 
 static uint16_t spc_adrDpy(Spc* spc) {
-  return ((spc_readOpcode(spc) + spc->y) & 0xff) | (spc->p << 8);
+  uint16_t res = ((spc_readOpcode(spc) + spc->y) & 0xff) | (spc->p << 8);
+  spc_idle(spc);
+  return res;
 }
 
 static uint16_t spc_adrAbx(Spc* spc) {
-  return (spc_readOpcodeWord(spc) + spc->x) & 0xffff;
+  uint16_t res = (spc_readOpcodeWord(spc) + spc->x) & 0xffff;
+  spc_idle(spc);
+  return res;
 }
 
 static uint16_t spc_adrAby(Spc* spc) {
-  return (spc_readOpcodeWord(spc) + spc->y) & 0xffff;
+  uint16_t res = (spc_readOpcodeWord(spc) + spc->y) & 0xffff;
+  spc_idle(spc);
+  return res;
 }
 
 static uint16_t spc_adrIdy(Spc* spc) {
   uint8_t pointer = spc_readOpcode(spc);
   uint16_t adr = spc_readWord(spc, pointer | (spc->p << 8), ((pointer + 1) & 0xff) | (spc->p << 8));
+  spc_idle(spc);
   return (adr + spc->y) & 0xffff;
 }
 
-static uint16_t spc_adrDpDp(Spc* spc, uint16_t* src) {
-  *src = spc_readOpcode(spc) | (spc->p << 8);
+static uint16_t spc_adrDpDp(Spc* spc, uint8_t* srcVal) {
+  *srcVal = spc_read(spc, spc_readOpcode(spc) | (spc->p << 8));
   return spc_readOpcode(spc) | (spc->p << 8);
 }
 
-static uint16_t spc_adrDpImm(Spc* spc, uint16_t* src) {
-  *src = spc->pc++;
+static uint16_t spc_adrDpImm(Spc* spc, uint8_t* srcVal) {
+  *srcVal = spc_readOpcode(spc);
   return spc_readOpcode(spc) | (spc->p << 8);
 }
 
-static uint16_t spc_adrIndInd(Spc* spc, uint16_t* src) {
-  *src = spc->y | (spc->p << 8);
+static uint16_t spc_adrIndInd(Spc* spc, uint8_t* srcVal) {
+  spc_read(spc, spc->pc);
+  *srcVal = spc_read(spc, spc->y | (spc->p << 8));
   return spc->x | (spc->p << 8);
 }
 
@@ -237,6 +259,7 @@ static uint16_t spc_adrDpWord(Spc* spc, uint16_t* low) {
 }
 
 static uint16_t spc_adrIndP(Spc* spc) {
+  spc_read(spc, spc->pc);
   return spc->x++ | (spc->p << 8);
 }
 
@@ -247,8 +270,7 @@ static void spc_and(Spc* spc, uint16_t adr) {
   spc_setZN(spc, spc->a);
 }
 
-static void spc_andm(Spc* spc, uint16_t dst, uint16_t src) {
-  uint8_t value = spc_read(spc, src);
+static void spc_andm(Spc* spc, uint16_t dst, uint8_t value) {
   uint8_t result = spc_read(spc, dst) & value;
   spc_write(spc, dst, result);
   spc_setZN(spc, result);
@@ -259,8 +281,7 @@ static void spc_or(Spc* spc, uint16_t adr) {
   spc_setZN(spc, spc->a);
 }
 
-static void spc_orm(Spc* spc, uint16_t dst, uint16_t src) {
-  uint8_t value = spc_read(spc, src);
+static void spc_orm(Spc* spc, uint16_t dst, uint8_t value) {
   uint8_t result = spc_read(spc, dst) | value;
   spc_write(spc, dst, result);
   spc_setZN(spc, result);
@@ -271,8 +292,7 @@ static void spc_eor(Spc* spc, uint16_t adr) {
   spc_setZN(spc, spc->a);
 }
 
-static void spc_eorm(Spc* spc, uint16_t dst, uint16_t src) {
-  uint8_t value = spc_read(spc, src);
+static void spc_eorm(Spc* spc, uint16_t dst, uint8_t value) {
   uint8_t result = spc_read(spc, dst) ^ value;
   spc_write(spc, dst, result);
   spc_setZN(spc, result);
@@ -288,8 +308,7 @@ static void spc_adc(Spc* spc, uint16_t adr) {
   spc_setZN(spc, spc->a);
 }
 
-static void spc_adcm(Spc* spc, uint16_t dst, uint16_t src) {
-  uint8_t value = spc_read(spc, src);
+static void spc_adcm(Spc* spc, uint16_t dst, uint8_t value) {
   uint8_t applyOn = spc_read(spc, dst);
   int result = applyOn + value + spc->c;
   spc->v = (applyOn & 0x80) == (value & 0x80) && (value & 0x80) != (result & 0x80);
@@ -309,8 +328,8 @@ static void spc_sbc(Spc* spc, uint16_t adr) {
   spc_setZN(spc, spc->a);
 }
 
-static void spc_sbcm(Spc* spc, uint16_t dst, uint16_t src) {
-  uint8_t value = spc_read(spc, src) ^ 0xff;
+static void spc_sbcm(Spc* spc, uint16_t dst, uint8_t value) {
+  value ^= 0xff;
   uint8_t applyOn = spc_read(spc, dst);
   int result = applyOn + value + spc->c;
   spc->v = (applyOn & 0x80) == (value & 0x80) && (value & 0x80) != (result & 0x80);
@@ -341,10 +360,11 @@ static void spc_cmpy(Spc* spc, uint16_t adr) {
   spc_setZN(spc, result);
 }
 
-static void spc_cmpm(Spc* spc, uint16_t dst, uint16_t src) {
-  uint8_t value = spc_read(spc, src) ^ 0xff;
+static void spc_cmpm(Spc* spc, uint16_t dst, uint8_t value) {
+  value ^= 0xff;
   int result = spc_read(spc, dst) + value + 1;
   spc->c = result > 0xff;
+  spc_idle(spc);
   spc_setZN(spc, result);
 }
 
@@ -427,6 +447,7 @@ static void spc_dec(Spc* spc, uint16_t adr) {
 static void spc_doOpcode(Spc* spc, uint8_t opcode) {
   switch(opcode) {
     case 0x00: { // nop imp
+      spc_read(spc, spc->pc);
       // no operation
       break;
     }
@@ -446,7 +467,10 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     case 0xd1:
     case 0xe1:
     case 0xf1: { // tcall imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc_pushWord(spc, spc->pc);
+      spc_idle(spc);
       uint16_t adr = 0xffde - (2 * (opcode >> 4));
       spc->pc = spc_readWord(spc, adr, adr + 1);
       break;
@@ -484,6 +508,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     case 0xc3:
     case 0xe3: { // bbs dp, rel
       uint8_t val = spc_read(spc, spc_adrDp(spc));
+      spc_idle(spc);
       spc_doBranch(spc, spc_readOpcode(spc), val & (1 << (opcode >> 5)));
       break;
     }
@@ -496,6 +521,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     case 0xd3:
     case 0xf3: { // bbc dp, rel
       uint8_t val = spc_read(spc, spc_adrDp(spc));
+      spc_idle(spc);
       spc_doBranch(spc, spc_readOpcode(spc), (val & (1 << (opcode >> 5))) == 0);
       break;
     }
@@ -520,7 +546,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x09: { // orm dp, dp
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpDp(spc, &src);
       spc_orm(spc, dst, src);
       break;
@@ -529,6 +555,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       uint16_t adr = 0;
       uint8_t bit = spc_adrAbsBit(spc, &adr);
       spc->c = spc->c | ((spc_read(spc, adr) >> bit) & 1);
+      spc_idle(spc);
       break;
     }
     case 0x0b: { // asl dp
@@ -540,20 +567,25 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x0d: { // pushp imp
+      spc_read(spc, spc->pc);
       spc_pushByte(spc, spc_getFlags(spc));
+      spc_idle(spc);
       break;
     }
     case 0x0e: { // tset1 abs
       uint16_t adr = spc_adrAbs(spc);
       uint8_t val = spc_read(spc, adr);
+      spc_read(spc, adr);
       uint8_t result = spc->a + (val ^ 0xff) + 1;
       spc_setZN(spc, result);
       spc_write(spc, adr, val | spc->a);
       break;
     }
     case 0x0f: { // brk imp
+      spc_read(spc, spc->pc);
       spc_pushWord(spc, spc->pc);
       spc_pushByte(spc, spc_getFlags(spc));
+      spc_idle(spc);
       spc->i = false;
       spc->b = true;
       spc->pc = spc_readWord(spc, 0xffde, 0xffdf);
@@ -580,13 +612,13 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x18: { // orm dp, imm
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpImm(spc, &src);
       spc_orm(spc, dst, src);
       break;
     }
     case 0x19: { // orm ind, ind
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrIndInd(spc, &src);
       spc_orm(spc, dst, src);
       break;
@@ -594,10 +626,12 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     case 0x1a: { // decw dp
       uint16_t low = 0;
       uint16_t high = spc_adrDpWord(spc, &low);
-      uint16_t value = spc_readWord(spc, low, high) - 1;
+      uint16_t value = spc_read(spc, low) - 1;
+      spc_write(spc, low, value & 0xff);
+      value += spc_read(spc, high) << 8;
+      spc_write(spc, high, value >> 8);
       spc->z = value == 0;
       spc->n = value & 0x8000;
-      spc_writeWord(spc, low, high, value);
       break;
     }
     case 0x1b: { // asl dpx
@@ -605,12 +639,14 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x1c: { // asla imp
+      spc_read(spc, spc->pc);
       spc->c = spc->a & 0x80;
       spc->a <<= 1;
       spc_setZN(spc, spc->a);
       break;
     }
     case 0x1d: { // decx imp
+      spc_read(spc, spc->pc);
       spc->x--;
       spc_setZN(spc, spc->x);
       break;
@@ -621,10 +657,12 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     }
     case 0x1f: { // jmp iax
       uint16_t pointer = spc_readOpcodeWord(spc);
+      spc_idle(spc);
       spc->pc = spc_readWord(spc, (pointer + spc->x) & 0xffff, (pointer + spc->x + 1) & 0xffff);
       break;
     }
     case 0x20: { // clrp imp
+      spc_read(spc, spc->pc);
       spc->p = false;
       break;
     }
@@ -649,7 +687,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x29: { // andm dp, dp
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpDp(spc, &src);
       spc_andm(spc, dst, src);
       break;
@@ -658,6 +696,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       uint16_t adr = 0;
       uint8_t bit = spc_adrAbsBit(spc, &adr);
       spc->c = spc->c | (~(spc_read(spc, adr) >> bit) & 1);
+      spc_idle(spc);
       break;
     }
     case 0x2b: { // rol dp
@@ -669,17 +708,20 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x2d: { // pusha imp
+      spc_read(spc, spc->pc);
       spc_pushByte(spc, spc->a);
+      spc_idle(spc);
       break;
     }
     case 0x2e: { // cbne dp, rel
       uint8_t val = spc_read(spc, spc_adrDp(spc)) ^ 0xff;
+      spc_idle(spc);
       uint8_t result = spc->a + val + 1;
       spc_doBranch(spc, spc_readOpcode(spc), result != 0);
       break;
     }
     case 0x2f: { // bra rel
-      spc->pc += (int8_t) spc_readOpcode(spc);
+      spc_doBranch(spc, spc_readOpcode(spc), true);
       break;
     }
     case 0x30: { // bmi rel
@@ -703,13 +745,13 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x38: { // andm dp, imm
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpImm(spc, &src);
       spc_andm(spc, dst, src);
       break;
     }
     case 0x39: { // andm ind, ind
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrIndInd(spc, &src);
       spc_andm(spc, dst, src);
       break;
@@ -717,10 +759,12 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     case 0x3a: { // incw dp
       uint16_t low = 0;
       uint16_t high = spc_adrDpWord(spc, &low);
-      uint16_t value = spc_readWord(spc, low, high) + 1;
+      uint16_t value = spc_read(spc, low) + 1;
+      spc_write(spc, low, value & 0xff);
+      value += spc_read(spc, high) << 8;
+      spc_write(spc, high, value >> 8);
       spc->z = value == 0;
       spc->n = value & 0x8000;
-      spc_writeWord(spc, low, high, value);
       break;
     }
     case 0x3b: { // rol dpx
@@ -728,6 +772,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x3c: { // rola imp
+      spc_read(spc, spc->pc);
       bool newC = spc->a & 0x80;
       spc->a = (spc->a << 1) | spc->c;
       spc->c = newC;
@@ -735,6 +780,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x3d: { // incx imp
+      spc_read(spc, spc->pc);
       spc->x++;
       spc_setZN(spc, spc->x);
       break;
@@ -745,11 +791,15 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     }
     case 0x3f: { // call abs
       uint16_t dst = spc_readOpcodeWord(spc);
+      spc_idle(spc);
       spc_pushWord(spc, spc->pc);
+      spc_idle(spc);
+      spc_idle(spc);
       spc->pc = dst;
       break;
     }
     case 0x40: { // setp imp
+      spc_read(spc, spc->pc);
       spc->p = true;
       break;
     }
@@ -774,7 +824,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x49: { // eorm dp, dp
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpDp(spc, &src);
       spc_eorm(spc, dst, src);
       break;
@@ -794,12 +844,15 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x4d: { // pushx imp
+      spc_read(spc, spc->pc);
       spc_pushByte(spc, spc->x);
+      spc_idle(spc);
       break;
     }
     case 0x4e: { // tclr1 abs
       uint16_t adr = spc_adrAbs(spc);
       uint8_t val = spc_read(spc, adr);
+      spc_read(spc, adr);
       uint8_t result = spc->a + (val ^ 0xff) + 1;
       spc_setZN(spc, result);
       spc_write(spc, adr, val & ~spc->a);
@@ -807,7 +860,9 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     }
     case 0x4f: { // pcall dp
       uint8_t dst = spc_readOpcode(spc);
+      spc_idle(spc);
       spc_pushWord(spc, spc->pc);
+      spc_idle(spc);
       spc->pc = 0xff00 | dst;
       break;
     }
@@ -832,13 +887,13 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x58: { // eorm dp, imm
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpImm(spc, &src);
       spc_eorm(spc, dst, src);
       break;
     }
     case 0x59: { // eorm ind, ind
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrIndInd(spc, &src);
       spc_eorm(spc, dst, src);
       break;
@@ -859,12 +914,14 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x5c: { // lsra imp
+      spc_read(spc, spc->pc);
       spc->c = spc->a & 1;
       spc->a >>= 1;
       spc_setZN(spc, spc->a);
       break;
     }
     case 0x5d: { // movxa imp
+      spc_read(spc, spc->pc);
       spc->x = spc->a;
       spc_setZN(spc, spc->x);
       break;
@@ -878,6 +935,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x60: { // clrc imp
+      spc_read(spc, spc->pc);
       spc->c = false;
       break;
     }
@@ -902,7 +960,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x69: { // cmpm dp, dp
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpDp(spc, &src);
       spc_cmpm(spc, dst, src);
       break;
@@ -922,7 +980,9 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x6d: { // pushy imp
+      spc_read(spc, spc->pc);
       spc_pushByte(spc, spc->y);
+      spc_idle(spc);
       break;
     }
     case 0x6e: { // dbnz dp, rel
@@ -933,6 +993,8 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x6f: { // ret imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc->pc = spc_pullWord(spc);
       break;
     }
@@ -957,13 +1019,13 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x78: { // cmpm dp, imm
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpImm(spc, &src);
       spc_cmpm(spc, dst, src);
       break;
     }
     case 0x79: { // cmpm ind, ind
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrIndInd(spc, &src);
       spc_cmpm(spc, dst, src);
       break;
@@ -971,7 +1033,9 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     case 0x7a: { // addw dp
       uint16_t low = 0;
       uint16_t high = spc_adrDpWord(spc, &low);
-      uint16_t value = spc_readWord(spc, low, high);
+      uint8_t vall = spc_read(spc, low);
+      spc_idle(spc);
+      uint16_t value = vall | (spc_read(spc, high) << 8);
       uint16_t ya = spc->a | (spc->y << 8);
       int result = ya + value;
       spc->v = (ya & 0x8000) == (value & 0x8000) && (value & 0x8000) != (result & 0x8000);
@@ -988,6 +1052,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x7c: { // rora imp
+      spc_read(spc, spc->pc);
       bool newC = spc->a & 1;
       spc->a = (spc->a >> 1) | (spc->c << 7);
       spc->c = newC;
@@ -995,6 +1060,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x7d: { // movax imp
+      spc_read(spc, spc->pc);
       spc->a = spc->x;
       spc_setZN(spc, spc->a);
       break;
@@ -1004,11 +1070,14 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x7f: { // reti imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc_setFlags(spc, spc_pullByte(spc));
       spc->pc = spc_pullWord(spc);
       break;
     }
     case 0x80: { // setc imp
+      spc_read(spc, spc->pc);
       spc->c = true;
       break;
     }
@@ -1033,7 +1102,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x89: { // adcm dp, dp
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpDp(spc, &src);
       spc_adcm(spc, dst, src);
       break;
@@ -1042,6 +1111,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       uint16_t adr = 0;
       uint8_t bit = spc_adrAbsBit(spc, &adr);
       spc->c = spc->c ^ ((spc_read(spc, adr) >> bit) & 1);
+      spc_idle(spc);
       break;
     }
     case 0x8b: { // dec dp
@@ -1057,13 +1127,14 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x8e: { // popp imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc_setFlags(spc, spc_pullByte(spc));
       break;
     }
     case 0x8f: { // movm dp, imm
-      uint16_t src = 0;
-      uint16_t dst = spc_adrDpImm(spc, &src);
-      uint8_t val = spc_read(spc, src);
+      uint8_t val = 0;
+      uint16_t dst = spc_adrDpImm(spc, &val);
       spc_read(spc, dst);
       spc_write(spc, dst, val);
       break;
@@ -1089,13 +1160,13 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x98: { // adcm dp, imm
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpImm(spc, &src);
       spc_adcm(spc, dst, src);
       break;
     }
     case 0x99: { // adcm ind, ind
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrIndInd(spc, &src);
       spc_adcm(spc, dst, src);
       break;
@@ -1103,7 +1174,9 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     case 0x9a: { // subw dp
       uint16_t low = 0;
       uint16_t high = spc_adrDpWord(spc, &low);
-      uint16_t value = spc_readWord(spc, low, high) ^ 0xffff;
+      uint8_t vall = spc_read(spc, low);
+      spc_idle(spc);
+      uint16_t value = (vall | (spc_read(spc, high) << 8)) ^ 0xffff;
       uint16_t ya = spc->a | (spc->y << 8);
       int result = ya + value + 1;
       spc->v = (ya & 0x8000) == (value & 0x8000) && (value & 0x8000) != (result & 0x8000);
@@ -1120,37 +1193,49 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x9c: { // deca imp
+      spc_read(spc, spc->pc);
       spc->a--;
       spc_setZN(spc, spc->a);
       break;
     }
     case 0x9d: { // movxp imp
+      spc_read(spc, spc->pc);
       spc->x = spc->sp;
       spc_setZN(spc, spc->x);
       break;
     }
     case 0x9e: { // div imp
-      // TODO: proper division algorithm
-      uint16_t value = spc->a | (spc->y << 8);
-      int result = 0xffff;
-      int mod = spc->a;
-      if(spc->x != 0) {
-        result = value / spc->x;
-        mod = value % spc->x;
-      }
-      spc->v = result > 0xff;
+      spc_read(spc, spc->pc);
+      for(int i = 0; i < 10; i++) spc_idle(spc);
       spc->h = (spc->x & 0xf) <= (spc->y & 0xf);
-      spc->a = result;
-      spc->y = mod;
+      int yva = (spc->y << 8) | spc->a;
+      int x = spc->x << 9;
+      for(int i = 0; i < 9; i++) {
+        yva <<= 1;
+        yva |= (yva & 0x20000) ? 1 : 0;
+        yva &= 0x1ffff;
+        if(yva >= x) yva ^= 1;
+        if(yva & 1) yva -= x;
+        yva &= 0x1ffff;
+      }
+      spc->y = yva >> 9;
+      spc->v = yva & 0x100;
+      spc->a = yva & 0xff;
       spc_setZN(spc, spc->a);
       break;
     }
     case 0x9f: { // xcn imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
+      spc_idle(spc);
+      spc_idle(spc);
       spc->a = (spc->a >> 4) | (spc->a << 4);
       spc_setZN(spc, spc->a);
       break;
     }
     case 0xa0: { // ei  imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc->i = true;
       break;
     }
@@ -1175,7 +1260,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xa9: { // sbcm dp, dp
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpDp(spc, &src);
       spc_sbcm(spc, dst, src);
       break;
@@ -1199,11 +1284,14 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xae: { // popa imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc->a = spc_pullByte(spc);
       break;
     }
     case 0xaf: { // movs ind+
       uint16_t adr = spc_adrIndP(spc);
+      spc_idle(spc);
       spc_write(spc, adr, spc->a);
       break;
     }
@@ -1228,13 +1316,13 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xb8: { // sbcm dp, imm
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrDpImm(spc, &src);
       spc_sbcm(spc, dst, src);
       break;
     }
     case 0xb9: { // sbcm ind, ind
-      uint16_t src = 0;
+      uint8_t src = 0;
       uint16_t dst = spc_adrIndInd(spc, &src);
       spc_sbcm(spc, dst, src);
       break;
@@ -1242,7 +1330,9 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     case 0xba: { // movw dp
       uint16_t low = 0;
       uint16_t high = spc_adrDpWord(spc, &low);
-      uint16_t val = spc_readWord(spc, low, high);
+      uint8_t vall = spc_read(spc, low);
+      spc_idle(spc);
+      uint16_t val = vall | (spc_read(spc, high) << 8);
       spc->a = val & 0xff;
       spc->y = val >> 8;
       spc->z = val == 0;
@@ -1254,15 +1344,19 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xbc: { // inca imp
+      spc_read(spc, spc->pc);
       spc->a++;
       spc_setZN(spc, spc->a);
       break;
     }
     case 0xbd: { // movpx imp
+      spc_read(spc, spc->pc);
       spc->sp = spc->x;
       break;
     }
     case 0xbe: { // das imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       if(spc->a > 0x99 || !spc->c) {
         spc->a -= 0x60;
         spc->c = false;
@@ -1276,10 +1370,13 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
     case 0xbf: { // mov ind+
       uint16_t adr = spc_adrIndP(spc);
       spc->a = spc_read(spc, adr);
+      spc_idle(spc);
       spc_setZN(spc, spc->a);
       break;
     }
     case 0xc0: { // di  imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc->i = false;
       break;
     }
@@ -1311,6 +1408,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       uint16_t adr = 0;
       uint8_t bit = spc_adrAbsBit(spc, &adr);
       uint8_t result = (spc_read(spc, adr) & (~(1 << bit))) | (spc->c << bit);
+      spc_idle(spc);
       spc_write(spc, adr, result);
       break;
     }
@@ -1327,10 +1425,14 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xce: { // popx imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc->x = spc_pullByte(spc);
       break;
     }
     case 0xcf: { // mul imp
+      spc_read(spc, spc->pc);
+      for(int i = 0; i < 7; i++) spc_idle(spc);
       uint16_t result = spc->a * spc->y;
       spc->a = result & 0xff;
       spc->y = result >> 8;
@@ -1378,22 +1480,27 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xdc: { // decy imp
+      spc_read(spc, spc->pc);
       spc->y--;
       spc_setZN(spc, spc->y);
       break;
     }
     case 0xdd: { // movay imp
+      spc_read(spc, spc->pc);
       spc->a = spc->y;
       spc_setZN(spc, spc->a);
       break;
     }
     case 0xde: { // cbne dpx, rel
       uint8_t val = spc_read(spc, spc_adrDpx(spc)) ^ 0xff;
+      spc_idle(spc);
       uint8_t result = spc->a + val + 1;
       spc_doBranch(spc, spc_readOpcode(spc), result != 0);
       break;
     }
     case 0xdf: { // daa imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       if(spc->a > 0x99 || spc->c) {
         spc->a += 0x60;
         spc->c = true;
@@ -1405,6 +1512,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xe0: { // clrv imp
+      spc_read(spc, spc->pc);
       spc->v = false;
       spc->h = false;
       break;
@@ -1449,14 +1557,20 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xed: { // notc imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc->c = !spc->c;
       break;
     }
     case 0xee: { // popy imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc->y = spc_pullByte(spc);
       break;
     }
     case 0xef: { // sleep imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc->stopped = true; // no interrupts, so sleeping stops as well
       break;
     }
@@ -1489,9 +1603,8 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xfa: { // movm dp, dp
-      uint16_t src = 0;
-      uint16_t dst = spc_adrDpDp(spc, &src);
-      uint8_t val = spc_read(spc, src);
+      uint8_t val = 0;
+      uint16_t dst = spc_adrDpDp(spc, &val);
       spc_write(spc, dst, val);
       break;
     }
@@ -1500,21 +1613,27 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xfc: { // incy imp
+      spc_read(spc, spc->pc);
       spc->y++;
       spc_setZN(spc, spc->y);
       break;
     }
     case 0xfd: { // movya imp
+      spc_read(spc, spc->pc);
       spc->y = spc->a;
       spc_setZN(spc, spc->y);
       break;
     }
     case 0xfe: { // dbnzy rel
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc->y--;
       spc_doBranch(spc, spc_readOpcode(spc), spc->y != 0);
       break;
     }
     case 0xff: { // stop imp
+      spc_read(spc, spc->pc);
+      spc_idle(spc);
       spc->stopped = true;
       break;
     }

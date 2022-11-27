@@ -185,9 +185,9 @@ void getDisassemblySpc(Snes* snes, char* line) {
   uint16_t adr = snes->apu->spc->pc;
   // read 3 bytes
   // TODO: this can have side effects, implement and use peaking
-  uint8_t opcode = apu_cpuRead(snes->apu, adr);
-  uint8_t byte = apu_cpuRead(snes->apu, (adr + 1) & 0xffff);
-  uint8_t byte2 = apu_cpuRead(snes->apu, (adr + 2) & 0xffff);
+  uint8_t opcode = apu_read(snes->apu, adr);
+  uint8_t byte = apu_read(snes->apu, (adr + 1) & 0xffff);
+  uint8_t byte2 = apu_read(snes->apu, (adr + 2) & 0xffff);
   uint16_t word = (byte2 << 8) | byte;
   uint16_t rel = snes->apu->spc->pc + 2 + (int8_t) byte;
   uint16_t rel2 = snes->apu->spc->pc + 2 + (int8_t) byte2;
