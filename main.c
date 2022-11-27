@@ -54,6 +54,7 @@ int main(int argc, char** argv) {
     printf("Failed to create renderer: %s\n", SDL_GetError());
     return 1;
   }
+  SDL_RenderSetLogicalSize(renderer, 512, 480); // Preserve aspect ratio
   SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, 512, 480);
   if(texture == NULL) {
     printf("Failed to create texture: %s\n", SDL_GetError());
@@ -82,6 +83,12 @@ int main(int argc, char** argv) {
   } else {
     puts("No rom loaded");
   }
+  // window title with rom-path
+  char windowTitle[255];
+  char* programTitle = "LakeSnes - ";
+  strcpy(windowTitle, programTitle);
+  strncat(windowTitle, argv[1], 255 - 13);
+  SDL_SetWindowTitle(window, windowTitle);
   // display stuff
   SDL_DisplayMode mode;
   SDL_GetDisplayMode(0, 0, &mode);
