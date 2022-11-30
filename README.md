@@ -11,9 +11,20 @@ Performance, although much better than my JS version, is still quite bad though,
 
 ## Compiling
 
-The Makefile is currently set up for compiling on macOS, provided a copy of `SDL2.framework` is placed in a `sdl2` directory (can be downloaded from the main SDL2 site) and clang & make are available. With that in place, simply run `make`.
+### MacOS
 
-Compiling on Linux will require SDL2 to be available, the Makefile to be modified for including SDL2 the correct way (lines 3 & 4) and possibly changing the `#include` that includes SDL2 in `main.c` (line 8). The used C compiler can also be changed, if needed (Makefile, line 2). Apart from SDL2, no other dependencies are used. After doing that, running `make` should (hopefully) work. Future intent is for this to be possible without needing to modify any files.
+- Make sure `clang` and `make` are available (`xcode-select --install`)
+- Download the SDL2 `.dmg` via the releases on the [SDL Github](https://github.com/libsdl-org/SDL)
+- Place the `SDL2.framework` found in the disk image in a subdirectory called `sdl2`
+- Run `make`
+
+### Linux
+
+- Make sure `gcc` and `make` are available (`sudo apt install build-essential`)
+- Get SDL2-dev via the package manager (`sudo apt install libsdl2-dev`)
+- Run `make`
+
+Note that these build are dependend on SDL2 being installed / found in `./sdl2`.
 
 Compiling on Windows will most likely require something like Cygwin/Mingw, or WSL. This is left as an exercise for the reader (for now).
 

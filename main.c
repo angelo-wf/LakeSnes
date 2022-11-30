@@ -32,6 +32,7 @@ shifting into sign bit makes value negative
 
 static uint8_t* readFile(const char* name, size_t* length);
 static bool loadRom(const char* name, Snes* snes);
+static void setTitle(SDL_Window* window, const char* path);
 static bool checkExtention(const char* name, bool forZip);
 static void playAudio(Snes* snes, SDL_AudioDeviceID device, int16_t* audioBuffer);
 static void renderScreen(Snes* snes, SDL_Renderer* renderer, SDL_Texture* texture);
@@ -80,15 +81,10 @@ int main(int argc, char** argv) {
   bool loaded = false;
   if(argc >= 2) {
     loaded = loadRom(argv[1], snes);
+    if(loaded) setTitle(window, argv[1]);
   } else {
     puts("No rom loaded");
   }
-  // window title with rom-path
-  char windowTitle[255];
-  char* programTitle = "LakeSnes - ";
-  strcpy(windowTitle, programTitle);
-  strncat(windowTitle, argv[1], 255 - 13);
-  SDL_SetWindowTitle(window, windowTitle);
   // display stuff
   SDL_DisplayMode mode;
   SDL_GetDisplayMode(0, 0, &mode);
@@ -160,6 +156,7 @@ int main(int argc, char** argv) {
         case SDL_DROPFILE: {
           char* droppedFile = event.drop.file;
           if(loadRom(droppedFile, snes)) loaded = true;
+          if(loaded) setTitle(window, droppedFile);
           SDL_free(droppedFile);
           break;
         }
@@ -301,16 +298,33 @@ static bool loadRom(const char* name, Snes* snes) {
   return result;
 }
 
+static void setTitle(SDL_Window* window, const char* path) {
+  // get last occurence of '/'
+  const char* filename = strrchr(path, '/');
+  if(filename == NULL) {
+    filename = path;
+  } else {
+    filename += 1; // skip past '/' itself
+  }
+  int length = strlen(filename);
+  char* title = malloc(length + 12); // "LakeSnes - ": 11 characters, +1 for '\0'
+  strcpy(title, "LakeSnes - ");
+  strcat(title, filename);
+  SDL_SetWindowTitle(window, title);
+  free(title);
+}
+
 static uint8_t* readFile(const char* name, size_t* length) {
   FILE* f = fopen(name, "rb");
-  if(f == NULL) {
-    return NULL;
-  }
+  if(f == NULL) return NULL;
   fseek(f, 0, SEEK_END);
   int size = ftell(f);
   rewind(f);
   uint8_t* buffer = malloc(size);
-  fread(buffer, size, 1, f);
+  if(fread(buffer, size, 1, f) != 1) {
+    fclose(f);
+    return NULL;
+  }
   fclose(f);
   *length = size;
   return buffer;
