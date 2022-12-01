@@ -63,7 +63,7 @@ Additionally, the following command are available:
 | K   | Toggle SPC logging |
 | J   | Dumps some data    |
 
-Alt+Enter can be used to toggle fullscreen (note that this seems to show some graphical garbage on macOS for some reason).
+Alt+Enter can be used to toggle fullscreen mode.
 
 'Log-mode' causes it to log all executed CPU and/or SPC opcodes, along with register and flag state, while running a limited amount of cycles each frame. Each CPU can be toggled on or off (defaults to on).
 J currently dumps the 128K WRAM, 64K VRAM, 512B CGRAM, 544B OAM and 64K ARAM to a file called `dump.bin`.

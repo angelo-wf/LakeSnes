@@ -44,8 +44,7 @@ int main(int argc, char** argv) {
     printf("Failed to init SDL: %s\n", SDL_GetError());
     return 1;
   }
-  int winFlags = SDL_WINDOWPOS_UNDEFINED;
-  SDL_Window* window = SDL_CreateWindow("LakeSnes", SDL_WINDOWPOS_UNDEFINED, winFlags, 512, 480, SDL_WINDOW_RESIZABLE);
+  SDL_Window* window = SDL_CreateWindow("LakeSnes", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 512, 480, SDL_WINDOW_RESIZABLE);
   if(window == NULL) {
     printf("Failed to create window: %s\n", SDL_GetError());
     return 1;
@@ -99,6 +98,7 @@ int main(int argc, char** argv) {
   bool runOne = false;
   bool turbo = false;
   SDL_Event event;
+  int fullscreenFlags = 0;
   uint32_t lastTick = SDL_GetTicks();
   uint32_t curTick = 0;
   uint32_t delta = 0;
@@ -133,13 +133,18 @@ int main(int argc, char** argv) {
             }
             case SDLK_i: cpuPrint = !cpuPrint; break;
             case SDLK_k: spcPrint = !spcPrint; break;
-            case SDLK_RETURN:
-              if (event.key.keysym.mod & KMOD_ALT) {
-                winFlags ^= SDL_WINDOW_FULLSCREEN_DESKTOP;
-                SDL_SetWindowFullscreen(window, winFlags & SDL_WINDOW_FULLSCREEN_DESKTOP);
+            case SDLK_RETURN: {
+              if(event.key.keysym.mod & KMOD_ALT) {
+                fullscreenFlags ^= SDL_WINDOW_FULLSCREEN_DESKTOP;
+                SDL_SetWindowFullscreen(window, fullscreenFlags);
               }
+              break;
+            }
           }
-          handleInput(snes, event.key.keysym.sym, true);
+          if((event.key.keysym.mod & (KMOD_ALT | KMOD_CTRL | KMOD_GUI)) == 0) {
+            // only send keypress if not holding ctrl/alt/meta
+            handleInput(snes, event.key.keysym.sym, true);
+          }
           break;
         }
         case SDL_KEYUP: {
@@ -191,6 +196,7 @@ int main(int argc, char** argv) {
         renderScreen(snes, renderer, texture);
       }
     }
+    SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, texture, NULL, NULL);
     SDL_RenderPresent(renderer); // vsyncs to 60 FPS
     // if vsync isn't working, delay manually
