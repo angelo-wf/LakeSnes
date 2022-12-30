@@ -178,19 +178,19 @@ int main(int argc, char** argv) {
           }
           snes_runFrame(snes);
         } else {
-          for(int i = 0; i < 50; i++) {
-            snes_debugCycle(snes, &cpuNext, &spcNext);
-            if(cpuNext && cpuPrint) {
-              char line[80];
-              getProcessorStateCpu(snes, line);
-              puts(line);
-            }
-            if(spcNext && spcPrint) {
-              char line[57];
-              getProcessorStateSpc(snes, line);
-              puts(line);
-            }
-          }
+          // for(int i = 0; i < 50; i++) {
+          //   // snes_debugCycle(snes, &cpuNext, &spcNext);
+          //   if(cpuNext && cpuPrint) {
+          //     char line[80];
+          //     getProcessorStateCpu(snes, line);
+          //     puts(line);
+          //   }
+          //   if(spcNext && spcPrint) {
+          //     char line[57];
+          //     getProcessorStateSpc(snes, line);
+          //     puts(line);
+          //   }
+          // }
         }
         playAudio(snes, device, audioBuffer);
         renderScreen(snes, renderer, texture);

@@ -30,8 +30,8 @@ struct Snes {
   uint16_t hPos;
   uint16_t vPos;
   uint32_t frames;
+  uint32_t cycles;
   // cpu handling
-  uint8_t cpuCyclesLeft;
   double apuCatchupCycles;
   // nmi / irq
   bool hIrqEnabled;
@@ -62,6 +62,8 @@ void snes_free(Snes* snes);
 void snes_reset(Snes* snes, bool hard);
 void snes_runFrame(Snes* snes);
 // used by dma, cpu
+void snes_runCycles(Snes* snes, int cycles);
+void snes_syncCycles(Snes* snes, int syncCycles);
 uint8_t snes_readBBus(Snes* snes, uint8_t adr);
 void snes_writeBBus(Snes* snes, uint8_t adr, uint8_t val);
 uint8_t snes_read(Snes* snes, uint32_t adr);
@@ -70,7 +72,7 @@ void snes_cpuIdle(void* mem, bool waiting);
 uint8_t snes_cpuRead(void* mem, uint32_t adr);
 void snes_cpuWrite(void* mem, uint32_t adr, uint8_t val);
 // debugging
-void snes_debugCycle(Snes* snes, bool* cpuNext, bool* spcNext);
+// void snes_debugCycle(Snes* snes, bool* cpuNext, bool* spcNext);
 
 // snes_other.c functions:
 

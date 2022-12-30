@@ -8,9 +8,7 @@ else
 	sdlflags = `sdl2-config --cflags --libs`
 endif
 
-# CFLAGS = -O0 -g -I ./snes -I ./zip
-CFLAGS = -O3 -g -I ./snes -I ./zip
-# CFLAGS = -O3 -flto -g -I ./snes -I ./zip
+CFLAGS = -O3 -I ./snes -I ./zip
 
 execname = lakesnes
 

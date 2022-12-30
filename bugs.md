@@ -74,6 +74,8 @@ Generally, at least the following general issues seem at play:
 - Jurassic Park 2
   - Title screen palette seems to be slowly overwritten
   - Music sounds off (wrong samples) [does not happen in SnesJS]
+- Lizard
+  - Screen is blacked out by semi-random lines (HDMA issue?)
 - Power Drive
   - Broken graphics on name select screen
   - Cannot move once in-game (?)

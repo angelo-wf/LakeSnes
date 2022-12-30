@@ -60,7 +60,7 @@ void snes_reset(Snes* snes, bool hard) {
   snes->hPos = 0;
   snes->vPos = 0;
   snes->frames = 0;
-  snes->cpuCyclesLeft = 0;
+  snes->cycles = 0;
   snes->apuCatchupCycles = 0.0;
   snes->hIrqEnabled = false;
   snes->vIrqEnabled = false;
@@ -83,22 +83,38 @@ void snes_reset(Snes* snes, bool hard) {
 }
 
 void snes_runFrame(Snes* snes) {
-  // runs a signle frame (run cycles until v/h pos is at 0,0)
-  do {
+  // TODO: handle possible dma transfers that take entire vblank (240-261)
+  // run until we are starting a new frame (~240 -> 0)
+  while(snes->vPos >= 240) {
+    snes_runCpu(snes);
+  }
+  // then run until we are at/after line 240 (0 -> ~240)
+  while(snes->vPos < 240) {
+    snes_runCpu(snes);
+  }
+  snes_catchupApu(snes); // catch up the apu after running
+}
+
+void snes_runCycles(Snes* snes, int cycles) {
+  if(snes->hPos + cycles >= 536 && snes->hPos < 536) {
+    // if we go past 536, add 40 cycles for dram refersh
+    cycles += 40;
+  }
+  for(int i = 0; i < cycles / 2; i++) {
     snes_runCycle(snes);
-  } while(!(snes->hPos == 0 && snes->vPos == 0));
+  }
+}
+
+void snes_syncCycles(Snes* snes, int syncCycles) {
+  int count = syncCycles - (snes->cycles % syncCycles);
+  snes_runCycles(snes, count);
 }
 
 static void snes_runCycle(Snes* snes) {
   snes->apuCatchupCycles += apuCyclesPerMaster * 2.0;
+  snes->cycles += 2;
   input_cycle(snes->input1);
   input_cycle(snes->input2);
-  // if not in dram refresh, if we are busy with hdma/dma, do that, else do cpu cycle
-  if(snes->hPos < 536 || snes->hPos >= 576) {
-    if(!dma_cycle(snes->dma)) {
-      snes_runCpu(snes);
-    }
-  }
   // check for h/v timer irq's
   if(snes->vIrqEnabled && snes->hIrqEnabled) {
     if(snes->vPos == snes->vTimer && snes->hPos == (4 * snes->hTimer)) {
@@ -125,7 +141,7 @@ static void snes_runCycle(Snes* snes) {
       // end of vblank
       snes->inVblank = false;
       snes->inNmi = false;
-      dma_initHdma(snes->dma);
+      snes->dma->hdmaInitRequested = true;
     } else if(snes->vPos == 225) {
       // ask the ppu if we start vblank now or at vPos 240 (overscan)
       startingVblank = !ppu_checkOverscan(snes->ppu);
@@ -152,7 +168,7 @@ static void snes_runCycle(Snes* snes) {
     if(!snes->inVblank) ppu_runLine(snes->ppu, snes->vPos);
   } else if(snes->hPos == 1024) {
     // start of hblank
-    if(!snes->inVblank) dma_doHdma(snes->dma);
+    snes->dma->hdmaRunRequested = true;
   }
   // handle autoJoyRead-timer
   if(snes->autoJoyTimer > 0) snes->autoJoyTimer -= 2;
@@ -166,16 +182,12 @@ static void snes_runCycle(Snes* snes) {
     if(snes->vPos == 262) {
       snes->vPos = 0;
       snes->frames++;
-      snes_catchupApu(snes); // catch up the apu at the end of the frame
     }
   }
 }
 
 static void snes_runCpu(Snes* snes) {
-  if(snes->cpuCyclesLeft == 0) {
-    cpu_runOpcode(snes->cpu);
-  }
-  snes->cpuCyclesLeft -= 2;
+  cpu_runOpcode(snes->cpu);
 }
 
 static void snes_catchupApu(Snes* snes) {
@@ -485,36 +497,41 @@ uint8_t snes_read(Snes* snes, uint32_t adr) {
 
 void snes_cpuIdle(void* mem, bool waiting) {
   Snes* snes = (Snes*) mem;
-  snes->cpuCyclesLeft += 6;
+  dma_handleDma(snes->dma, 6);
+  snes_runCycles(snes, 6);
 }
 
 uint8_t snes_cpuRead(void* mem, uint32_t adr) {
   Snes* snes = (Snes*) mem;
-  snes->cpuCyclesLeft += snes_getAccessTime(snes, adr);
+  int cycles = snes_getAccessTime(snes, adr);
+  dma_handleDma(snes->dma, cycles);
+  snes_runCycles(snes, cycles);
   return snes_read(snes, adr);
 }
 
 void snes_cpuWrite(void* mem, uint32_t adr, uint8_t val) {
   Snes* snes = (Snes*) mem;
-  snes->cpuCyclesLeft += snes_getAccessTime(snes, adr);
+  int cycles = snes_getAccessTime(snes, adr);
+  dma_handleDma(snes->dma, cycles);
+  snes_runCycles(snes, cycles);
   snes_write(snes, adr, val);
 }
 
 // debugging
 
-void snes_debugCycle(Snes* snes, bool* cpuNext, bool* spcNext) {
-  // runs a normal cycle, catches up the apu, then looks if the next cycle will execute a CPU and/or a SPC opcode
-  snes_runCycle(snes);
-  snes_catchupApu(snes);
-  if(snes->dma->hdmaTimer > 0 || snes->dma->dmaBusy || (snes->hPos >= 536 && snes->hPos < 576)) {
-    *cpuNext = false;
-  } else {
-    *cpuNext = snes->cpuCyclesLeft == 0;
-  }
-  if(snes->apuCatchupCycles + (apuCyclesPerMaster * 2.0) >= 1.0) {
-    // we will run a apu cycle next call, see if it also starts a opcode
-    *spcNext = snes->apu->cpuCyclesLeft == 0;
-  } else {
-    *spcNext = false;
-  }
-}
+// void snes_debugCycle(Snes* snes, bool* cpuNext, bool* spcNext) {
+//   // runs a normal cycle, catches up the apu, then looks if the next cycle will execute a CPU and/or a SPC opcode
+//   snes_runCycle(snes);
+//   snes_catchupApu(snes);
+//   if(snes->dma->hdmaTimer > 0 || snes->dma->dmaBusy || (snes->hPos >= 536 && snes->hPos < 576)) {
+//     *cpuNext = false;
+//   } else {
+//     *cpuNext = snes->cpuCyclesLeft == 0;
+//   }
+//   if(snes->apuCatchupCycles + (apuCyclesPerMaster * 2.0) >= 1.0) {
+//     // we will run a apu cycle next call, see if it also starts a opcode
+//     *spcNext = snes->apu->cpuCyclesLeft == 0;
+//   } else {
+//     *spcNext = false;
+//   }
+// }

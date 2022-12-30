@@ -28,15 +28,14 @@ typedef struct DmaChannel {
   bool unusedBit;
   bool doTransfer; // hdma
   bool terminated; // hdma
-  uint8_t offIndex;
 } DmaChannel;
 
 struct Dma {
   Snes* snes;
   DmaChannel channel[8];
-  uint16_t hdmaTimer;
-  uint32_t dmaTimer;
-  bool dmaBusy;
+  uint8_t dmaState;
+  bool hdmaInitRequested;
+  bool hdmaRunRequested;
 };
 
 Dma* dma_init(Snes* snes);
@@ -44,10 +43,7 @@ void dma_free(Dma* dma);
 void dma_reset(Dma* dma);
 uint8_t dma_read(Dma* dma, uint16_t adr); // 43x0-43xf
 void dma_write(Dma* dma, uint16_t adr, uint8_t val); // 43x0-43xf
-void dma_doDma(Dma* dma);
-void dma_initHdma(Dma* dma);
-void dma_doHdma(Dma* dma);
-bool dma_cycle(Dma* dma);
+void dma_handleDma(Dma* dma, int cpuCycles);
 void dma_startDma(Dma* dma, uint8_t val, bool hdma);
 
 

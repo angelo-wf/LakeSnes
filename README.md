@@ -65,7 +65,10 @@ Additionally, the following command are available:
 
 Alt+Enter can be used to toggle fullscreen mode.
 
-'Log-mode' causes it to log all executed CPU and/or SPC opcodes, along with register and flag state, while running a limited amount of cycles each frame. Each CPU can be toggled on or off (defaults to on).
+NOTE: 'log-mode' currently does not work, due to changes made to how the emulator handles timing/running cycles.
+
+'Log-mode' would cause it to log all executed CPU and/or SPC opcodes, along with register and flag state, while running a limited amount of cycles each frame. Each CPU can be toggled on or off (defaults to on).
+
 J currently dumps the 128K WRAM, 64K VRAM, 512B CGRAM, 544B OAM and 64K ARAM to a file called `dump.bin`.
 
 Save states are not supported yet, but are planned.
