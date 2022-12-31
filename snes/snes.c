@@ -61,6 +61,7 @@ void snes_reset(Snes* snes, bool hard) {
   snes->vPos = 0;
   snes->frames = 0;
   snes->cycles = 0;
+  snes->syncCycle = 0;
   snes->apuCatchupCycles = 0.0;
   snes->hIrqEnabled = false;
   snes->vIrqEnabled = false;
@@ -105,9 +106,15 @@ void snes_runCycles(Snes* snes, int cycles) {
   }
 }
 
-void snes_syncCycles(Snes* snes, int syncCycles) {
-  int count = syncCycles - (snes->cycles % syncCycles);
-  snes_runCycles(snes, count);
+void snes_syncCycles(Snes* snes, bool start, int syncCycles) {
+  if(start) {
+    snes->syncCycle = snes->cycles;
+    int count = syncCycles - (snes->cycles % syncCycles);
+    snes_runCycles(snes, count);
+  } else {
+    int count = syncCycles - ((snes->cycles - snes->syncCycle) % syncCycles);
+    snes_runCycles(snes, count);
+  }
 }
 
 static void snes_runCycle(Snes* snes) {
@@ -168,7 +175,7 @@ static void snes_runCycle(Snes* snes) {
     if(!snes->inVblank) ppu_runLine(snes->ppu, snes->vPos);
   } else if(snes->hPos == 1024) {
     // start of hblank
-    snes->dma->hdmaRunRequested = true;
+    if(!snes->inVblank) snes->dma->hdmaRunRequested = true;
   }
   // handle autoJoyRead-timer
   if(snes->autoJoyTimer > 0) snes->autoJoyTimer -= 2;
