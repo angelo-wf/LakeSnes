@@ -337,7 +337,7 @@ static void dma_transferByte(Dma* dma, uint16_t aAdr, uint8_t aBank, uint8_t bAd
 }
 
 void dma_handleDma(Dma* dma, int cpuCycles) {
-  // if hdma triggered, do it, except if dmastate indicates we will do dma now
+  // if hdma triggered, do it, except if dmastate indicates dma will be done now
   // (it will be done as part of the dma in that case)
   if(dma->hdmaInitRequested && dma->dmaState != 2) dma_initHdma(dma, true, cpuCycles);
   if(dma->hdmaRunRequested && dma->dmaState != 2) dma_doHdma(dma, true, cpuCycles);

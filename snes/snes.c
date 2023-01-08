@@ -69,6 +69,7 @@ void snes_reset(Snes* snes, bool hard) {
   snes->hTimer = 0x1ff;
   snes->vTimer = 0x1ff;
   snes->inNmi = false;
+  snes->irqCondition = false;
   snes->inIrq = false;
   snes->inVblank = false;
   memset(snes->portAutoRead, 0, sizeof(snes->portAutoRead));
@@ -84,13 +85,13 @@ void snes_reset(Snes* snes, bool hard) {
 }
 
 void snes_runFrame(Snes* snes) {
-  // TODO: handle possible dma transfers that take entire vblank (240-261)
-  // run until we are starting a new frame (~240 -> 0)
-  while(snes->vPos >= 240) {
+  // TODO: handle dma's that take up entire vblank
+  // run until we are starting a new frame (leaving vblank)
+  while(snes->inVblank) {
     snes_runCpu(snes);
   }
-  // then run until we are at/after line 240 (0 -> ~240)
-  while(snes->vPos < 240) {
+  // then run until we are at vblank
+  while(!snes->inVblank) {
     snes_runCpu(snes);
   }
   snes_catchupApu(snes); // catch up the apu after running
@@ -101,7 +102,7 @@ void snes_runCycles(Snes* snes, int cycles) {
     // if we go past 536, add 40 cycles for dram refersh
     cycles += 40;
   }
-  for(int i = 0; i < cycles / 2; i++) {
+  for(int i = 0; i < cycles; i += 2) {
     snes_runCycle(snes);
   }
 }
@@ -120,25 +121,17 @@ void snes_syncCycles(Snes* snes, bool start, int syncCycles) {
 static void snes_runCycle(Snes* snes) {
   snes->apuCatchupCycles += apuCyclesPerMaster * 2.0;
   snes->cycles += 2;
-  input_cycle(snes->input1);
-  input_cycle(snes->input2);
   // check for h/v timer irq's
-  if(snes->vIrqEnabled && snes->hIrqEnabled) {
-    if(snes->vPos == snes->vTimer && snes->hPos == (4 * snes->hTimer)) {
-      snes->inIrq = true;
-      cpu_setIrq(snes->cpu, true);
-    }
-  } else if(snes->vIrqEnabled && !snes->hIrqEnabled) {
-    if(snes->vPos == snes->vTimer && snes->hPos == 0) {
-      snes->inIrq = true;
-      cpu_setIrq(snes->cpu, true);
-    }
-  } else if(!snes->vIrqEnabled && snes->hIrqEnabled) {
-    if(snes->hPos == (4 * snes->hTimer)) {
-      snes->inIrq = true;
-      cpu_setIrq(snes->cpu, true);
-    }
+  bool condition = (
+    (snes->vIrqEnabled || snes->hIrqEnabled) &&
+    (snes->vPos == snes->vTimer || !snes->vIrqEnabled) &&
+    (snes->hPos == snes->hTimer * 4 || !snes->hIrqEnabled)
+  );
+  if(!snes->irqCondition && condition) {
+    snes->inIrq = true;
+    cpu_setIrq(snes->cpu, true);
   }
+  snes->irqCondition = condition;
   // handle positional stuff
   // TODO: better timing? (especially Hpos)
   if(snes->hPos == 0) {
@@ -206,14 +199,12 @@ static void snes_catchupApu(Snes* snes) {
 }
 
 static void snes_doAutoJoypad(Snes* snes) {
-  // TODO: improve? (now calls input_cycle)
   memset(snes->portAutoRead, 0, sizeof(snes->portAutoRead));
-  snes->input1->latchLine = true;
-  snes->input2->latchLine = true;
-  input_cycle(snes->input1); // latches the controllers
-  input_cycle(snes->input2);
-  snes->input1->latchLine = false;
-  snes->input2->latchLine = false;
+  // latch controllers
+  input_latch(snes->input1, true);
+  input_latch(snes->input2, true);
+  input_latch(snes->input1, false);
+  input_latch(snes->input2, false);
   for(int i = 0; i < 16; i++) {
     uint8_t val = input_read(snes->input1);
     snes->portAutoRead[0] |= ((val & 1) << (15 - i));
@@ -331,13 +322,15 @@ static void snes_writeReg(Snes* snes, uint16_t adr, uint8_t val) {
       if(!snes->autoJoyRead) snes->autoJoyTimer = 0;
       snes->hIrqEnabled = val & 0x10;
       snes->vIrqEnabled = val & 0x20;
-      snes->nmiEnabled = val & 0x80;
       if(!snes->hIrqEnabled && !snes->vIrqEnabled) {
         snes->inIrq = false;
         cpu_setIrq(snes->cpu, false);
       }
-      // TODO: enabling nmi during vblank with inNmi still set generates nmi
-      //   enabling virq (and not h) on the vPos that vTimer is at generates irq (?)
+      // if nmi is enabled while inNmi is still set, immediately generate nmi
+      if(!snes->nmiEnabled && (val & 0x80) && snes->inNmi) {
+        cpu_nmi(snes->cpu);
+      }
+      snes->nmiEnabled = val & 0x80;
       break;
     }
     case 0x4201: {
@@ -453,8 +446,8 @@ void snes_write(Snes* snes, uint32_t adr, uint8_t val) {
       snes_writeBBus(snes, adr & 0xff, val); // B-bus
     }
     if(adr == 0x4016) {
-      snes->input1->latchLine = val & 1;
-      snes->input2->latchLine = val & 1;
+      input_latch(snes->input1, val & 1);
+      input_latch(snes->input2, val & 1);
     }
     if(adr >= 0x4200 && adr < 0x4220) {
       snes_writeReg(snes, adr, val); // internal registers
@@ -470,29 +463,13 @@ void snes_write(Snes* snes, uint32_t adr, uint8_t val) {
 static int snes_getAccessTime(Snes* snes, uint32_t adr) {
   uint8_t bank = adr >> 16;
   adr &= 0xffff;
-  if(bank >= 0x40 && bank < 0x80) {
-    return 8; // slow
+  if((bank < 0x40 || (bank >= 0x80 && bank < 0xc0)) && adr < 0x8000) {
+    // 00-3f,80-bf:0-8000
+    if(adr < 0x2000 || adr >= 0x6000) return 8; // 0-1fff, 6000-7fff
+    if(adr < 0x4000 || adr >= 0x4200) return 6; // 2000-3fff, 4200-5fff
+    return 12; // 4000-41ff
   }
-  if(bank >= 0xc0) {
-    return snes->fastMem ? 6 : 8; // depends on setting
-  }
-  // banks 0x00-0x3f and 0x80-0xcf
-  if(adr < 0x2000) {
-    return 8; // slow
-  }
-  if(adr < 0x4000) {
-    return 6; // fast
-  }
-  if(adr < 0x4200) {
-    return 12; // extra slow
-  }
-  if(adr < 0x6000) {
-    return 6; // fast
-  }
-  if(adr < 0x8000) {
-    return 8; // slow
-  }
-  // 0x8000-0xffff
+  // 40-7f,co-ff:0000-ffff, 00-3f,80-bf:8000-ffff
   return (snes->fastMem && bank >= 0x80) ? 6 : 8; // depends on setting in banks 80+
 }
 

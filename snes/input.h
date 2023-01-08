@@ -22,7 +22,7 @@ struct Input {
 Input* input_init(Snes* snes);
 void input_free(Input* input);
 void input_reset(Input* input);
-void input_cycle(Input* input);
+void input_latch(Input* input, bool value);
 uint8_t input_read(Input* input);
 
 #endif

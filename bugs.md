@@ -23,8 +23,6 @@ Generally, at least the following general issues seem at play:
   - Bugs due to not emulating mid-scanline effects
   - Some sound effects sound off, and start mixing into the music
   - Freezes on, or before mission info screen
-- Alien vs Predator
-  - Flashes black every other frame in-game
 - Battle Grand Prix
   - Audio freezes after pressing start, game freezes at following SPC upload
 - Breath of fire 2
@@ -33,8 +31,8 @@ Generally, at least the following general issues seem at play:
   - Sound effects sound off (not released properly?)
 - Death Brade
   - Match ends instantly
-- F1 Grand Prix
-  - HUD is glitchy
+- F-1 Grand Prix
+  - HUD is missing some tiles (sprite dropout?)
 - Final Fantasy II
   - Music sounds somewhat off (some instruments)
 - Final Fantasy III
@@ -48,31 +46,26 @@ Generally, at least the following general issues seem at play:
   - Music and sound effects sound off
 - Hook
   - Intros have incorrect colours and glitchy text
-- Jumbo Ozaki no Hole in One
-  - Weird colour-gradients during course preview
 - King of Dragons
   - Music on title screen sounds wrong
 - Krusty's Super Fun House
   - Freezes on boot (CPU's execution ends up off the rails)
 - Mecarobot Golf
-  - Flashing of the ground in-game during movement
-  - Sometimes freezes (hard to reproduce, happened once in lesson mode)
+  - Some odd flashing of the ground in-game during movement
+  - Sometimes freezes (?, hard to reproduce, happened once in lesson mode)
 - Illusion of Gaia
   - Title screen is silent
   - Freezes when pressing start (stuck in SPC upload)  
 - Jurassic Park
   - Sides of screen are not masked properly
 - Jurassic Park 2
-  - Music sounds off (wrong samples) [does not happen in SnesJS]
+  - Music sounds off (wrong samples) *[does not happen in SnesJS]*
 - Power Drive
   - Broken graphics on name select screen
   - Cannot move once in-game (?)
 - Rendering Ranger R2
   - Freezes on boot (stuck in SPC upload)
-- Robocop versus the Terminator
-  - Flashes black every other frame in-game
-- Sink or Swim
-  - Water works incorrectly (fills the screen, breaks scrolling)
+- S.O.S. Sink or Swim
   - Music sounds off, sound effects are missing
 - Soul Blazer
   - Music sounds off (wrong samples)
@@ -81,7 +74,5 @@ Generally, at least the following general issues seem at play:
 - Taz-Mania
   - Audio breaks during gameplay (might cause game freeze at following SPC upload)
 - Toy Story
-  - Sprite-dropout problems in "Really inside the claw machine" when holding an alien (and some other places) [does not happen in SnesJS]
-  - Odd noise when starting a new level, some sound effects keep going during and when exiting levels [does not happen in SnesJS]
-- Wild Guns
-  - Flashes to incorrect scroll every other frame in-game
+  - Sprite-dropout problems in "Really inside the claw machine" when holding an alien (and some other places) *[does not happen in SnesJS]*
+  - Odd noise when starting a new level, some sound effects keep going during and when exiting levels *[does not happen in SnesJS]*

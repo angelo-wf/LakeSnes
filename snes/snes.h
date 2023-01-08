@@ -41,6 +41,7 @@ struct Snes {
   uint16_t hTimer;
   uint16_t vTimer;
   bool inNmi;
+  bool irqCondition;
   bool inIrq;
   bool inVblank;
   // joypad handling
