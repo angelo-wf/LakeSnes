@@ -84,14 +84,6 @@ int main(int argc, char** argv) {
   } else {
     puts("No rom loaded");
   }
-  // display stuff
-  SDL_DisplayMode mode;
-  SDL_GetDisplayMode(0, 0, &mode);
-  int refreshRate = mode.refresh_rate;
-  printf("Refresh rate: %dHz\n", refreshRate);
-  float adder = 60 / (float) refreshRate;
-  float addCol = 0.0;
-  int expectedMs = 1000 / refreshRate;
   // sdl loop
   bool running = true;
   bool paused = false;
@@ -99,21 +91,17 @@ int main(int argc, char** argv) {
   bool turbo = false;
   SDL_Event event;
   int fullscreenFlags = 0;
-  uint32_t lastTick = SDL_GetTicks();
-  uint32_t curTick = 0;
-  uint32_t delta = 0;
-  // debugging
-  bool debugging = false;
-  bool cpuNext = false;
-  bool spcNext = false;
-  bool cpuPrint = true;
-  bool spcPrint = true;
+  // timing
+  uint64_t countFreq = SDL_GetPerformanceFrequency();
+  uint64_t lastCount = SDL_GetPerformanceCounter();
+  float timeAdder = 0.0;
+  float wanted = 1.0 / 60.0;
+
   while(running) {
     while(SDL_PollEvent(&event)) {
       switch(event.type) {
         case SDL_KEYDOWN: {
           switch(event.key.keysym.sym) {
-            case SDLK_l: debugging = !debugging; break;
             case SDLK_r: snes_reset(snes, false); break;
             case SDLK_e: snes_reset(snes, true); break;
             case SDLK_o: runOne = true; break;
@@ -131,8 +119,21 @@ int main(int argc, char** argv) {
               fclose(f);
               break;
             }
-            case SDLK_i: cpuPrint = !cpuPrint; break;
-            case SDLK_k: spcPrint = !spcPrint; break;
+            case SDLK_l: {
+              // run one cpu cycle
+              snes_runCpuCycle(snes);
+              char line[80];
+              getProcessorStateCpu(snes, line);
+              puts(line);
+              break;
+            }
+            case SDLK_k: {
+              // TODO: spc cycling
+              // char line[57];
+              // getProcessorStateSpc(snes, line);
+              // puts(line);
+              break;
+            }
             case SDLK_RETURN: {
               if(event.key.keysym.mod & KMOD_ALT) {
                 fullscreenFlags ^= SDL_WINDOW_FULLSCREEN_DESKTOP;
@@ -167,45 +168,36 @@ int main(int argc, char** argv) {
         }
       }
     }
-    addCol += adder;
-    if(addCol >= 1.0) {
-      addCol -= 1.0;
+
+    uint64_t curCount = SDL_GetPerformanceCounter();
+    uint64_t delta = curCount - lastCount;
+    lastCount = curCount;
+    float seconds = delta / (float) countFreq;
+    timeAdder += seconds;
+    // allow 1 ms earlier, to prevent skipping due to being just below wanted
+    if(timeAdder >= wanted - 0.001) {
+      timeAdder -= wanted;
+      // run frame
       if(loaded && (!paused || runOne)) {
         runOne = false;
-        if(!debugging) {
-          if(turbo) {
-            snes_runFrame(snes);
-          }
+        if(turbo) {
           snes_runFrame(snes);
-        } else {
-          // for(int i = 0; i < 50; i++) {
-          //   // snes_debugCycle(snes, &cpuNext, &spcNext);
-          //   if(cpuNext && cpuPrint) {
-          //     char line[80];
-          //     getProcessorStateCpu(snes, line);
-          //     puts(line);
-          //   }
-          //   if(spcNext && spcPrint) {
-          //     char line[57];
-          //     getProcessorStateSpc(snes, line);
-          //     puts(line);
-          //   }
-          // }
         }
+        snes_runFrame(snes);
         playAudio(snes, device, audioBuffer);
         renderScreen(snes, renderer, texture);
       }
     }
+
     SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, texture, NULL, NULL);
-    SDL_RenderPresent(renderer); // vsyncs to 60 FPS
-    // if vsync isn't working, delay manually
-    curTick = SDL_GetTicks();
-    delta = curTick - lastTick;
-    if(delta < expectedMs) {
-      SDL_Delay(expectedMs - delta);
+    int ticks = SDL_GetTicks();
+    SDL_RenderPresent(renderer); // should vsync
+    int deltaTicks = SDL_GetTicks() - ticks;
+    if(deltaTicks < 4) {
+      // vsync did not work, delay manually
+      SDL_Delay(8);
     }
-    lastTick = curTick;
   }
   // clean snes
   snes_free(snes);

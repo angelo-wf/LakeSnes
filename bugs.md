@@ -22,7 +22,6 @@ Generally, at least the following general issues seem at play:
 - Air Strike Patrol
   - Bugs due to not emulating mid-scanline effects
   - Some sound effects sound off, and start mixing into the music
-  - Freezes on, or before mission info screen
 - Battle Grand Prix
   - Audio freezes after pressing start, game freezes at following SPC upload
 - Breath of fire 2

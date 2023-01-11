@@ -85,13 +85,14 @@ void snes_reset(Snes* snes, bool hard) {
 }
 
 void snes_runFrame(Snes* snes) {
-  // TODO: handle dma's that take up entire vblank
+  // TODO: improve handling of dma's that take up entire vblank / frame
   // run until we are starting a new frame (leaving vblank)
   while(snes->inVblank) {
     snes_runCpu(snes);
   }
-  // then run until we are at vblank
-  while(!snes->inVblank) {
+  // then run until we are at vblank, or we end up at next frame (DMA caused vblank to be skipped)
+  uint32_t frame = snes->frames;
+  while(!snes->inVblank && frame == snes->frames) {
     snes_runCpu(snes);
   }
   snes_catchupApu(snes); // catch up the apu after running
@@ -133,7 +134,6 @@ static void snes_runCycle(Snes* snes) {
   }
   snes->irqCondition = condition;
   // handle positional stuff
-  // TODO: better timing? (especially Hpos)
   if(snes->hPos == 0) {
     // end of hblank, do most vPos-tests
     bool startingVblank = false;
@@ -141,7 +141,7 @@ static void snes_runCycle(Snes* snes) {
       // end of vblank
       snes->inVblank = false;
       snes->inNmi = false;
-      snes->dma->hdmaInitRequested = true;
+      ppu_handleFrameStart(snes->ppu);
     } else if(snes->vPos == 225) {
       // ask the ppu if we start vblank now or at vPos 240 (overscan)
       startingVblank = !ppu_checkOverscan(snes->ppu);
@@ -163,23 +163,24 @@ static void snes_runCycle(Snes* snes) {
         cpu_nmi(snes->cpu);
       }
     }
+  } else if(snes->hPos == 16) {
+    if(snes->vPos == 0) snes->dma->hdmaInitRequested = true;
   } else if(snes->hPos == 512) {
     // render the line halfway of the screen for better compatibility
-    if(!snes->inVblank) ppu_runLine(snes->ppu, snes->vPos);
-  } else if(snes->hPos == 1024) {
-    // start of hblank
+    if(!snes->inVblank && snes->vPos > 0) ppu_runLine(snes->ppu, snes->vPos);
+  } else if(snes->hPos == 1104) {
     if(!snes->inVblank) snes->dma->hdmaRunRequested = true;
   }
   // handle autoJoyRead-timer
   if(snes->autoJoyTimer > 0) snes->autoJoyTimer -= 2;
   // increment position
-  // TODO: exact frame timing (line 240 on odd frame is 4 cycles shorter,
-  //   even frames in interlace is 1 extra line)
   snes->hPos += 2;
-  if(snes->hPos == 1364) {
+  // line 240 of odd frame with no interlace is 4 cycles shorter
+  if((snes->hPos == 1360 && snes->vPos == 240 && !snes->ppu->evenFrame && !snes->ppu->frameInterlace) || snes->hPos == 1364) {
     snes->hPos = 0;
     snes->vPos++;
-    if(snes->vPos == 262) {
+    // even interlace frame is 263 lines
+    if((snes->vPos == 262 && (!snes->ppu->frameInterlace || !snes->ppu->evenFrame)) || snes->vPos == 263) {
       snes->vPos = 0;
       snes->frames++;
     }
@@ -278,7 +279,7 @@ static uint8_t snes_readReg(Snes* snes, uint16_t adr) {
     }
     case 0x4212: {
       uint8_t val = (snes->autoJoyTimer > 0);
-      val |= (snes->hPos >= 1024) << 6;
+      val |= (snes->hPos < 4 || snes->hPos >= 1096) << 6;
       val |= snes->inVblank << 7;
       return val | (snes->openBus & 0x3e);
     }
@@ -446,7 +447,7 @@ void snes_write(Snes* snes, uint32_t adr, uint8_t val) {
       snes_writeBBus(snes, adr & 0xff, val); // B-bus
     }
     if(adr == 0x4016) {
-      input_latch(snes->input1, val & 1);
+      input_latch(snes->input1, val & 1); // input latch
       input_latch(snes->input2, val & 1);
     }
     if(adr >= 0x4200 && adr < 0x4220) {
@@ -464,7 +465,7 @@ static int snes_getAccessTime(Snes* snes, uint32_t adr) {
   uint8_t bank = adr >> 16;
   adr &= 0xffff;
   if((bank < 0x40 || (bank >= 0x80 && bank < 0xc0)) && adr < 0x8000) {
-    // 00-3f,80-bf:0-8000
+    // 00-3f,80-bf:0-7fff
     if(adr < 0x2000 || adr >= 0x6000) return 8; // 0-1fff, 6000-7fff
     if(adr < 0x4000 || adr >= 0x4200) return 6; // 2000-3fff, 4200-5fff
     return 12; // 4000-41ff
@@ -503,19 +504,6 @@ void snes_cpuWrite(void* mem, uint32_t adr, uint8_t val) {
 
 // debugging
 
-// void snes_debugCycle(Snes* snes, bool* cpuNext, bool* spcNext) {
-//   // runs a normal cycle, catches up the apu, then looks if the next cycle will execute a CPU and/or a SPC opcode
-//   snes_runCycle(snes);
-//   snes_catchupApu(snes);
-//   if(snes->dma->hdmaTimer > 0 || snes->dma->dmaBusy || (snes->hPos >= 536 && snes->hPos < 576)) {
-//     *cpuNext = false;
-//   } else {
-//     *cpuNext = snes->cpuCyclesLeft == 0;
-//   }
-//   if(snes->apuCatchupCycles + (apuCyclesPerMaster * 2.0) >= 1.0) {
-//     // we will run a apu cycle next call, see if it also starts a opcode
-//     *spcNext = snes->apu->cpuCyclesLeft == 0;
-//   } else {
-//     *spcNext = false;
-//   }
-// }
+void snes_runCpuCycle(Snes* snes) {
+  snes_runCpu(snes);
+}

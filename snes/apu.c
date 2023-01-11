@@ -48,7 +48,7 @@ void apu_reset(Apu* apu) {
     apu->timer[i].counter = 0;
     apu->timer[i].enabled = false;
   }
-  apu->cpuCyclesLeft = 7;
+  apu->cpuCyclesLeft = 0;
 }
 
 void apu_cycle(Apu* apu) {

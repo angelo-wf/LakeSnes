@@ -58,16 +58,16 @@ Additionally, the following command are available:
 | P   | Pause              |
 | O   | Frame advance      |
 | T   | Turbo              |
-| L   | Toggle log-mode    |
-| I   | Toggle CPU logging |
-| K   | Toggle SPC logging |
+| L   | Run one CPU cycle  |
+| K   | Run one SPC cycle* |
 | J   | Dumps some data    |
+
+*: Does not work yet.
 
 Alt+Enter can be used to toggle fullscreen mode.
 
-NOTE: 'log-mode' currently does not work, due to changes made to how the emulator handles timing/running cycles.
-
-'Log-mode' would cause it to log all executed CPU and/or SPC opcodes, along with register and flag state, while running a limited amount of cycles each frame. Each CPU can be toggled on or off (defaults to on).
+L will run one CPU cycle, and then logs the CPU state (opcode, registers, flags).
+K does not function yet, but is planned to do the same, but for the SPC.
 
 J currently dumps the 128K WRAM, 64K VRAM, 512B CGRAM, 544B OAM and 64K ARAM to a file called `dump.bin`.
 
@@ -78,13 +78,13 @@ Save states are not supported yet, but are planned.
 The emulator currently only supports regular LoROM and HiROM games (no co-processors and such).
 Battery saves are not retained yet. SPC files can also not be loaded yet.
 
-This emulator is definitely not fully accurate. The CPU and SPC are both opcode-based and the 'execute all at once, then stall the correct amount of cycles'-pattern is used a lot. The PPU renders per scanline, so mid-scanline effects are not supported. The DSP executes on a per-sample basis.
+This emulator is definitely not fully accurate. The PPU renders per scanline, so mid-scanline effects are not supported. The DSP executes on a per-sample basis. The SPC is currently still opcode-based (although the SPC core itself is cycle-accurate). The CPU-side timing should be cycle-accurate now, but the exact timing of certain event is still somewhat off. Communication between the CPU and SPC is also not cycle-accurate.
 
-Quite a few TODO's are scattered throughout the code for things that are currently not quite fully emulated, mostly related to edge cases, timings, disallowed accesses and some lesser-used PPU features.
+Quite a few TODO's are scattered throughout the code for things that are currently not quite fully emulated, mostly related to edge cases and some lesser-used PPU features.
 
 Some things that are not emulated at all are full emulation-mode for the 65816, and the test-register ($f0) for the SPC.
 
-Some games that I have tested seem to run without obvious issues, although quite a few games do seem to glitch somewhat or freeze. `bugs.md` contains a non-exhaustive list of games that have emulation-bugs.
+Some games that I have tested seem to run without obvious issues, although some games do seem to glitch somewhat or freeze. `bugs.md` contains a non-exhaustive list of games that have emulation-bugs.
 
 ## License
 

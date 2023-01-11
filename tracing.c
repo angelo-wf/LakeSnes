@@ -144,6 +144,14 @@ void getProcessorStateSpc(Snes* snes, char* line) {
 
 static void getDisassemblyCpu(Snes* snes, char* line) {
   uint32_t adr = snes->cpu->pc | (snes->cpu->k << 16);
+  if(snes->cpu->stopped) {
+    sprintf(line, "%s", "<stopped>    ");
+    return;
+  }
+  if(snes->cpu->waiting) {
+    sprintf(line, "%s", "<waiting>    ");
+    return;
+  }
   // read 4 bytes
   // TODO: this can have side effects, implement and use peaking
   uint8_t opcode = snes_read(snes, adr);
@@ -183,6 +191,10 @@ static void getDisassemblyCpu(Snes* snes, char* line) {
 
 void getDisassemblySpc(Snes* snes, char* line) {
   uint16_t adr = snes->apu->spc->pc;
+  if(snes->apu->spc->stopped) {
+    sprintf(line, "%s", "<stopped>        ");
+    return;
+  }
   // read 3 bytes
   // TODO: this can have side effects, implement and use peaking
   uint8_t opcode = apu_read(snes->apu, adr);

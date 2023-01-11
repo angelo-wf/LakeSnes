@@ -95,7 +95,10 @@ void cpu_runOpcode(Cpu* cpu) {
   if(cpu->waiting) {
     if(cpu->irqWanted || cpu->nmiWanted) {
       cpu->waiting = false;
+      cpu_idle(cpu);
       cpu_checkInt(cpu);
+      cpu_idle(cpu);
+      return;
     } else {
       cpu_idleWait(cpu);
       return;

@@ -195,23 +195,23 @@ void ppu_handleVblank(Ppu* ppu) {
   ppu->frameInterlace = ppu->interlace; // set if we have a interlaced frame
 }
 
+void ppu_handleFrameStart(Ppu* ppu) {
+  // called at (0, 0)
+  ppu->mosaicStartLine = 1;
+  ppu->rangeOver = false;
+  ppu->timeOver = false;
+  ppu->evenFrame = !ppu->evenFrame;
+}
+
 void ppu_runLine(Ppu* ppu, int line) {
-  if(line == 0) {
-    // pre-render line
-    // TODO: this now happens halfway into the first line
-    ppu->mosaicStartLine = 1;
-    ppu->rangeOver = false;
-    ppu->timeOver = false;
-    ppu->evenFrame = !ppu->evenFrame;
-  } else {
-    // evaluate sprites
-    memset(ppu->objPixelBuffer, 0, sizeof(ppu->objPixelBuffer));
-    if(!ppu->forcedBlank) ppu_evaluateSprites(ppu, line - 1);
-    // actual line
-    if(ppu->mode == 7) ppu_calculateMode7Starts(ppu, line);
-    for(int x = 0; x < 256; x++) {
-      ppu_handlePixel(ppu, x, line);
-    }
+  // called for lines 1-224/239
+  // evaluate sprites
+  memset(ppu->objPixelBuffer, 0, sizeof(ppu->objPixelBuffer));
+  if(!ppu->forcedBlank) ppu_evaluateSprites(ppu, line - 1);
+  // actual line
+  if(ppu->mode == 7) ppu_calculateMode7Starts(ppu, line);
+  for(int x = 0; x < 256; x++) {
+    ppu_handlePixel(ppu, x, line);
   }
 }
 
