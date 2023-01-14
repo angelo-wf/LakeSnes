@@ -100,6 +100,7 @@ bool snes_loadRom(Snes* snes, const uint8_t* data, int length) {
     newData, newLength, headers[used].chips > 0 ? headers[used].ramSize : 0
   );
   snes_reset(snes, true); // reset after loading
+  snes->palTiming = headers[used].pal; // set region
   free(newData);
   return true;
 }

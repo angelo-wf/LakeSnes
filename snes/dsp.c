@@ -142,12 +142,10 @@ void dsp_cycle(Dsp* dsp) {
     totalR = 0;
   }
   dsp_handleNoise(dsp);
-  // put it in the samplebuffer
-  dsp->sampleBuffer[dsp->sampleOffset * 2] = totalL;
-  dsp->sampleBuffer[dsp->sampleOffset * 2 + 1] = totalR;
-  // prevent sampleOffset from going above 534-1 (out of sampleBuffer bounds)
-  if(dsp->sampleOffset < 533) dsp->sampleOffset++;
   dsp->evenCycle = !dsp->evenCycle;
+  // put final sample in the samplebuffer
+  dsp->sampleBuffer[(dsp->sampleOffset & 0x3ff) * 2] = totalL;
+  dsp->sampleBuffer[(dsp->sampleOffset++ & 0x3ff) * 2 + 1] = totalR;
 }
 
 static void dsp_handleEcho(Dsp* dsp, int* outputL, int* outputR) {
@@ -536,13 +534,13 @@ void dsp_write(Dsp* dsp, uint8_t adr, uint8_t val) {
 }
 
 void dsp_getSamples(Dsp* dsp, int16_t* sampleData, int samplesPerFrame) {
-  // resample from 534 samples per frame to wanted value
-  double adder = 534.0 / samplesPerFrame;
-  double location = 0.0;
+  // resample from 534 / 641 samples per frame to wanted value
+  float wantedSamples = (dsp->apu->snes->palTiming ? 641.0 : 534.0);
+  double adder = wantedSamples / samplesPerFrame;
+  double location = dsp->sampleOffset - wantedSamples;
   for(int i = 0; i < samplesPerFrame; i++) {
-    sampleData[i * 2] = dsp->sampleBuffer[((int) location) * 2];
-    sampleData[i * 2 + 1] = dsp->sampleBuffer[((int) location) * 2 + 1];
+    sampleData[i * 2] = dsp->sampleBuffer[(((int) location) & 0x3ff) * 2];
+    sampleData[i * 2 + 1] = dsp->sampleBuffer[(((int) location) & 0x3ff) * 2 + 1];
     location += adder;
   }
-  dsp->sampleOffset = 0;
 }

@@ -20,6 +20,7 @@ struct Snes {
   Ppu* ppu;
   Dma* dma;
   Cart* cart;
+  bool palTiming;
   // input
   Input* input1;
   Input* input2;

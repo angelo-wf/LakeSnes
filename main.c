@@ -34,7 +34,7 @@ static uint8_t* readFile(const char* name, size_t* length);
 static bool loadRom(const char* name, Snes* snes);
 static void setTitle(SDL_Window* window, const char* path);
 static bool checkExtention(const char* name, bool forZip);
-static void playAudio(Snes* snes, SDL_AudioDeviceID device, int16_t* audioBuffer);
+static void playAudio(Snes* snes, SDL_AudioDeviceID device, int16_t* audioBuffer, int wantedSamples);
 static void renderScreen(Snes* snes, SDL_Renderer* renderer, SDL_Texture* texture);
 static void handleInput(Snes* snes, int keyCode, bool pressed);
 
@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
     printf("Failed to open audio device: %s\n", SDL_GetError());
     return 1;
   }
-  int16_t* audioBuffer = malloc(735 * 4); // *2 for stereo, *2 for sizeof(int16)
+  int16_t* audioBuffer = malloc(882 * 4); // *2 for stereo, *2 for sizeof(int16)
   SDL_PauseAudioDevice(device, 0);
   // init snes, load rom
   Snes* snes = snes_init();
@@ -95,7 +95,8 @@ int main(int argc, char** argv) {
   uint64_t countFreq = SDL_GetPerformanceFrequency();
   uint64_t lastCount = SDL_GetPerformanceCounter();
   float timeAdder = 0.0;
-  float wanted = 1.0 / 60.0;
+  float wanted = 1.0 / (snes->palTiming ? 50.0 : 60.0);
+  int wantedSamples = snes->palTiming ? 882 : 735;
 
   while(running) {
     while(SDL_PollEvent(&event)) {
@@ -164,6 +165,8 @@ int main(int argc, char** argv) {
           if(loadRom(droppedFile, snes)) loaded = true;
           if(loaded) setTitle(window, droppedFile);
           SDL_free(droppedFile);
+          wanted = 1.0 / (snes->palTiming ? 50.0 : 60.0);
+          wantedSamples = snes->palTiming ? 882 : 735;
           break;
         }
       }
@@ -174,8 +177,8 @@ int main(int argc, char** argv) {
     lastCount = curCount;
     float seconds = delta / (float) countFreq;
     timeAdder += seconds;
-    // allow 1 ms earlier, to prevent skipping due to being just below wanted
-    if(timeAdder >= wanted - 0.001) {
+    // allow 2 ms earlier, to prevent skipping due to being just below wanted
+    while(timeAdder >= wanted - 0.002) {
       timeAdder -= wanted;
       // run frame
       if(loaded && (!paused || runOne)) {
@@ -184,7 +187,7 @@ int main(int argc, char** argv) {
           snes_runFrame(snes);
         }
         snes_runFrame(snes);
-        playAudio(snes, device, audioBuffer);
+        playAudio(snes, device, audioBuffer, wantedSamples);
         renderScreen(snes, renderer, texture);
       }
     }
@@ -212,11 +215,11 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-static void playAudio(Snes* snes, SDL_AudioDeviceID device, int16_t* audioBuffer) {
-  snes_setSamples(snes, audioBuffer, 735);
-  if(SDL_GetQueuedAudioSize(device) <= 735 * 4 * 6) {
+static void playAudio(Snes* snes, SDL_AudioDeviceID device, int16_t* audioBuffer, int wantedSamples) {
+  snes_setSamples(snes, audioBuffer, wantedSamples);
+  if(SDL_GetQueuedAudioSize(device) <= wantedSamples * 4 * 6) {
     // don't queue audio if buffer is still filled
-    SDL_QueueAudio(device, audioBuffer, 735 * 4);
+    SDL_QueueAudio(device, audioBuffer, wantedSamples * 4);
   }
 }
 

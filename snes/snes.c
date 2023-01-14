@@ -14,6 +14,7 @@
 #include "input.h"
 
 static const double apuCyclesPerMaster = (32040 * 32) / (1364 * 262 * 60.0);
+static const double apuCyclesPerMasterPal = (32040 * 32) / (1364 * 312 * 50.0);
 
 static void snes_runCycle(Snes* snes);
 static void snes_runCpu(Snes* snes);
@@ -33,6 +34,7 @@ Snes* snes_init(void) {
   snes->cart = cart_init(snes);
   snes->input1 = input_init(snes);
   snes->input2 = input_init(snes);
+  snes->palTiming = false;
   return snes;
 }
 
@@ -120,7 +122,7 @@ void snes_syncCycles(Snes* snes, bool start, int syncCycles) {
 }
 
 static void snes_runCycle(Snes* snes) {
-  snes->apuCatchupCycles += apuCyclesPerMaster * 2.0;
+  snes->apuCatchupCycles += (snes->palTiming ? apuCyclesPerMasterPal : apuCyclesPerMaster) * 2.0;
   snes->cycles += 2;
   // check for h/v timer irq's
   bool condition = (
@@ -175,14 +177,27 @@ static void snes_runCycle(Snes* snes) {
   if(snes->autoJoyTimer > 0) snes->autoJoyTimer -= 2;
   // increment position
   snes->hPos += 2;
-  // line 240 of odd frame with no interlace is 4 cycles shorter
-  if((snes->hPos == 1360 && snes->vPos == 240 && !snes->ppu->evenFrame && !snes->ppu->frameInterlace) || snes->hPos == 1364) {
-    snes->hPos = 0;
-    snes->vPos++;
-    // even interlace frame is 263 lines
-    if((snes->vPos == 262 && (!snes->ppu->frameInterlace || !snes->ppu->evenFrame)) || snes->vPos == 263) {
-      snes->vPos = 0;
-      snes->frames++;
+  if(!snes->palTiming) {
+    // line 240 of odd frame with no interlace is 4 cycles shorter
+    if((snes->hPos == 1360 && snes->vPos == 240 && !snes->ppu->evenFrame && !snes->ppu->frameInterlace) || snes->hPos == 1364) {
+      snes->hPos = 0;
+      snes->vPos++;
+      // even interlace frame is 263 lines
+      if((snes->vPos == 262 && (!snes->ppu->frameInterlace || !snes->ppu->evenFrame)) || snes->vPos == 263) {
+        snes->vPos = 0;
+        snes->frames++;
+      }
+    }
+  } else {
+    // line 311 of odd frame with interlace is 4 cycles longer
+    if((snes->hPos == 1364 && (snes->vPos != 311 || snes->ppu->evenFrame || !snes->ppu->frameInterlace)) || snes->hPos == 1368) {
+      snes->hPos = 0;
+      snes->vPos++;
+      // even interlace frame is 313 lines
+      if((snes->vPos == 312 && (!snes->ppu->frameInterlace || !snes->ppu->evenFrame)) || snes->vPos == 313) {
+        snes->vPos = 0;
+        snes->frames++;
+      }
     }
   }
 }

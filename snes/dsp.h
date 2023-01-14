@@ -72,8 +72,8 @@ struct Dsp {
   int8_t firValues[8];
   int16_t firBufferL[8];
   int16_t firBufferR[8];
-  // sample buffer (1 frame at 32040 Hz: 534 samples, *2 for stereo)
-  int16_t sampleBuffer[534 * 2];
+  // sample ring buffer (1024 samples, *2 for stereo)
+  int16_t sampleBuffer[0x400 * 2];
   uint16_t sampleOffset; // current offset in samplebuffer
 };
 
