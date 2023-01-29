@@ -75,6 +75,10 @@ int main(int argc, char** argv) {
   }
   int16_t* audioBuffer = malloc(882 * 4); // *2 for stereo, *2 for sizeof(int16)
   SDL_PauseAudioDevice(device, 0);
+  // print version
+  SDL_version version;
+  SDL_GetVersion(&version);
+  printf("LakeSnes - Running with SDL %d.%d.%d\n", version.major, version.minor, version.patch);
   // init snes, load rom
   Snes* snes = snes_init();
   bool loaded = false;
@@ -194,13 +198,7 @@ int main(int argc, char** argv) {
 
     SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, texture, NULL, NULL);
-    int ticks = SDL_GetTicks();
     SDL_RenderPresent(renderer); // should vsync
-    int deltaTicks = SDL_GetTicks() - ticks;
-    if(deltaTicks < 4) {
-      // vsync did not work, delay manually
-      SDL_Delay(8);
-    }
   }
   // clean snes
   snes_free(snes);

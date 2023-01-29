@@ -26,7 +26,7 @@ Performance, although much better than my JS version, is still quite bad though,
 
 Note that these build are dependend on SDL2 being installed / found in `./sdl2`.
 
-Compiling on Windows will most likely require something like Cygwin/Mingw, or WSL. This is left as an exercise for the reader (for now).
+Compiling on Windows will most likely require something like Cygwin/Mingw/Msys2, or WSL. This is left as an exercise for the reader (for now).
 
 ## Usage and controls
 
@@ -71,7 +71,9 @@ K does not function yet, but is planned to do the same, but for the SPC.
 
 J currently dumps the 128K WRAM, 64K VRAM, 512B CGRAM, 544B OAM and 64K ARAM to a file called `dump.bin`.
 
-Save states are not supported yet, but are planned.
+Save states and battery saving are not supported yet, but are planned.
+
+Minimizing or hiding the window can cause high CPU usage as this can cause v-sync to stop working.
 
 ## Compatibility
 
