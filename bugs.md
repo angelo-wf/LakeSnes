@@ -30,8 +30,6 @@ Generally, at least the following general issues seem at play:
   - Sound effects sound off (not released properly?)
 - Death Brade
   - Match ends instantly
-- F-1 Grand Prix
-  - HUD is missing some tiles (sprite dropout?)
 - Final Fantasy II
   - Music sounds somewhat off (some instruments)
 - Final Fantasy III
@@ -47,8 +45,6 @@ Generally, at least the following general issues seem at play:
   - Intros have incorrect colours and glitchy text
 - King of Dragons
   - Music on title screen sounds wrong
-- Krusty's Super Fun House
-  - Freezes on boot (CPU's execution ends up off the rails)
 - Mecarobot Golf
   - Some odd flashing of the ground in-game during movement
   - Sometimes freezes (?, hard to reproduce, happened once in lesson mode)
@@ -68,10 +64,7 @@ Generally, at least the following general issues seem at play:
   - Music sounds off, sound effects are missing
 - Soul Blazer
   - Music sounds off (wrong samples)
-- Super Bomberman
-  - Options on title-screen have sprite-dropout(?)
 - Taz-Mania
   - Audio breaks during gameplay (might cause game freeze at following SPC upload)
 - Toy Story
-  - Sprite-dropout problems in "Really inside the claw machine" when holding an alien (and some other places) *[does not happen in SnesJS]*
   - Odd noise when starting a new level, some sound effects keep going during and when exiting levels *[does not happen in SnesJS]*

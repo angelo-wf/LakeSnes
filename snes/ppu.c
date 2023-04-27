@@ -523,12 +523,12 @@ static bool ppu_getWindowState(Ppu* ppu, int layer, int x) {
 }
 
 static void ppu_evaluateSprites(Ppu* ppu, int line) {
-  // TODO: iterate over oam normally to determine in-range sprites,
-  //   then iterate those in-range sprites in reverse for tile-fetching
   // TODO: rectangular sprites, wierdness with sprites at -256
   uint8_t index = ppu->objPriority ? (ppu->oamAdr & 0xfe) : 0;
   int spritesFound = 0;
   int tilesFound = 0;
+  uint8_t foundSprites[32] = {};
+  // iterate over oam to find sprites in range
   for(int i = 0; i < 128; i++) {
     uint8_t y = ppu->oam[index] >> 8;
     // check if the sprite is on this line and get the sprite size
@@ -540,56 +540,70 @@ static void ppu_evaluateSprites(Ppu* ppu, int line) {
       int x = ppu->oam[index] & 0xff;
       x |= ((ppu->highOam[index >> 3] >> (index & 7)) & 1) << 8;
       if(x > 255) x -= 512;
-      // if in x-range
+      // if in x-range, record
       if(x > -spriteSize) {
         // break if we found 32 sprites already
         spritesFound++;
         if(spritesFound > 32) {
           ppu->rangeOver = true;
+          spritesFound = 32;
           break;
         }
-        // update row according to obj-interlace
-        if(ppu->objInterlace) row = row * 2 + (ppu->evenFrame ? 0 : 1);
-        // get some data for the sprite and y-flip row if needed
-        int tile = ppu->oam[index + 1] & 0xff;
-        int palette = (ppu->oam[index + 1] & 0xe00) >> 9;
-        bool hFlipped = ppu->oam[index + 1] & 0x4000;
-        if(ppu->oam[index + 1] & 0x8000) row = spriteSize - 1 - row;
-        // fetch all tiles in x-range
-        for(int col = 0; col < spriteSize; col += 8) {
-          if(col + x > -8 && col + x < 256) {
-            // break if we found 34 8*1 slivers already
-            tilesFound++;
-            if(tilesFound > 34) {
-              ppu->timeOver = true;
-              break;
-            }
-            // figure out which tile this uses, looping within 16x16 pages, and get it's data
-            int usedCol = hFlipped ? spriteSize - 1 - col : col;
-            uint8_t usedTile = (((tile >> 4) + (row / 8)) << 4) | (((tile & 0xf) + (usedCol / 8)) & 0xf);
-            uint16_t objAdr = (ppu->oam[index + 1] & 0x100) ? ppu->objTileAdr2 : ppu->objTileAdr1;
-            uint16_t plane1 = ppu->vram[(objAdr + usedTile * 16 + (row & 0x7)) & 0x7fff];
-            uint16_t plane2 = ppu->vram[(objAdr + usedTile * 16 + 8 + (row & 0x7)) & 0x7fff];
-            // go over each pixel
-            for(int px = 0; px < 8; px++) {
-              int shift = hFlipped ? px : 7 - px;
-              int pixel = (plane1 >> shift) & 1;
-              pixel |= ((plane1 >> (8 + shift)) & 1) << 1;
-              pixel |= ((plane2 >> shift) & 1) << 2;
-              pixel |= ((plane2 >> (8 + shift)) & 1) << 3;
-              // draw it in the buffer if there is a pixel here, and the buffer there is still empty
-              int screenCol = col + x + px;
-              if(pixel > 0 && screenCol >= 0 && screenCol < 256 && ppu->objPixelBuffer[screenCol] == 0) {
-                ppu->objPixelBuffer[screenCol] = 0x80 + 16 * palette + pixel;
-                ppu->objPriorityBuffer[screenCol] = (ppu->oam[index + 1] & 0x3000) >> 12;
-              }
-            }
-          }
-        }
-        if(tilesFound > 34) break; // break out of sprite-loop if max tiles found
+        foundSprites[spritesFound - 1] = index;
       }
     }
     index += 2;
+  }
+  // iterate over found sprites backwards to fetch max 34 tile slivers
+  for(int i = spritesFound; i > 0; i--) {
+    index = foundSprites[i - 1];
+    uint8_t y = ppu->oam[index] >> 8;
+    uint8_t row = line - y;
+    int spriteSize = spriteSizes[ppu->objSize][(ppu->highOam[index >> 3] >> ((index & 7) + 1)) & 1];
+    int x = ppu->oam[index] & 0xff;
+    x |= ((ppu->highOam[index >> 3] >> (index & 7)) & 1) << 8;
+    if(x > 255) x -= 512;
+    if(x > -spriteSize) {
+      // update row according to obj-interlace
+      if(ppu->objInterlace) row = row * 2 + (ppu->evenFrame ? 0 : 1);
+      // get some data for the sprite and y-flip row if needed
+      int tile = ppu->oam[index + 1] & 0xff;
+      int palette = (ppu->oam[index + 1] & 0xe00) >> 9;
+      bool hFlipped = ppu->oam[index + 1] & 0x4000;
+      if(ppu->oam[index + 1] & 0x8000) row = spriteSize - 1 - row;
+      // fetch all tiles in x-range
+      for(int col = 0; col < spriteSize; col += 8) {
+        if(col + x > -8 && col + x < 256) {
+          // break if we found > 34 8*1 slivers already
+          tilesFound++;
+          if(tilesFound > 34) {
+            ppu->timeOver = true;
+            break;
+          }
+          // figure out which tile this uses, looping within 16x16 pages, and get it's data
+          int usedCol = hFlipped ? spriteSize - 1 - col : col;
+          uint8_t usedTile = (((tile >> 4) + (row / 8)) << 4) | (((tile & 0xf) + (usedCol / 8)) & 0xf);
+          uint16_t objAdr = (ppu->oam[index + 1] & 0x100) ? ppu->objTileAdr2 : ppu->objTileAdr1;
+          uint16_t plane1 = ppu->vram[(objAdr + usedTile * 16 + (row & 0x7)) & 0x7fff];
+          uint16_t plane2 = ppu->vram[(objAdr + usedTile * 16 + 8 + (row & 0x7)) & 0x7fff];
+          // go over each pixel
+          for(int px = 0; px < 8; px++) {
+            int shift = hFlipped ? px : 7 - px;
+            int pixel = (plane1 >> shift) & 1;
+            pixel |= ((plane1 >> (8 + shift)) & 1) << 1;
+            pixel |= ((plane2 >> shift) & 1) << 2;
+            pixel |= ((plane2 >> (8 + shift)) & 1) << 3;
+            // draw it in the buffer if there is a pixel here
+            int screenCol = col + x + px;
+            if(pixel > 0 && screenCol >= 0 && screenCol < 256) {
+              ppu->objPixelBuffer[screenCol] = 0x80 + 16 * palette + pixel;
+              ppu->objPriorityBuffer[screenCol] = (ppu->oam[index + 1] & 0x3000) >> 12;
+            }
+          }
+        }
+      }
+      if(tilesFound > 34) break; // break out of sprite-loop if max tiles found
+    }
   }
 }
 
