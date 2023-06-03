@@ -8,6 +8,7 @@
 #include "snes.h"
 #include "cpu.h"
 #include "apu.h"
+#include "spc.h"
 #include "dma.h"
 #include "ppu.h"
 #include "cart.h"
@@ -17,7 +18,6 @@ static const double apuCyclesPerMaster = (32040 * 32) / (1364 * 262 * 60.0);
 static const double apuCyclesPerMasterPal = (32040 * 32) / (1364 * 312 * 50.0);
 
 static void snes_runCycle(Snes* snes);
-static void snes_runCpu(Snes* snes);
 static void snes_catchupApu(Snes* snes);
 static void snes_doAutoJoypad(Snes* snes);
 static uint8_t snes_readReg(Snes* snes, uint16_t adr);
@@ -90,12 +90,12 @@ void snes_runFrame(Snes* snes) {
   // TODO: improve handling of dma's that take up entire vblank / frame
   // run until we are starting a new frame (leaving vblank)
   while(snes->inVblank) {
-    snes_runCpu(snes);
+    cpu_runOpcode(snes->cpu);
   }
   // then run until we are at vblank, or we end up at next frame (DMA caused vblank to be skipped)
   uint32_t frame = snes->frames;
   while(!snes->inVblank && frame == snes->frames) {
-    snes_runCpu(snes);
+    cpu_runOpcode(snes->cpu);
   }
   snes_catchupApu(snes); // catch up the apu after running
 }
@@ -202,16 +202,10 @@ static void snes_runCycle(Snes* snes) {
   }
 }
 
-static void snes_runCpu(Snes* snes) {
-  cpu_runOpcode(snes->cpu);
-}
-
 static void snes_catchupApu(Snes* snes) {
   int catchupCycles = (int) snes->apuCatchupCycles;
-  for(int i = 0; i < catchupCycles; i++) {
-    apu_cycle(snes->apu);
-  }
-  snes->apuCatchupCycles -= (double) catchupCycles;
+  int ranCycles = apu_runCycles(snes->apu, catchupCycles);
+  snes->apuCatchupCycles -= (double) ranCycles;
 }
 
 static void snes_doAutoJoypad(Snes* snes) {
@@ -520,5 +514,10 @@ void snes_cpuWrite(void* mem, uint32_t adr, uint8_t val) {
 // debugging
 
 void snes_runCpuCycle(Snes* snes) {
-  snes_runCpu(snes);
+  cpu_runOpcode(snes->cpu);
+}
+
+void snes_runSpcCycle(Snes* snes) {
+  // TODO: apu catchup is not aware of this, SPC runs extra cycle(s)
+  spc_runOpcode(snes->apu->spc);
 }

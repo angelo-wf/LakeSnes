@@ -30,13 +30,12 @@ struct Apu {
   uint8_t inPorts[6]; // includes 2 bytes of ram
   uint8_t outPorts[4];
   Timer timer[3];
-  uint8_t cpuCyclesLeft;
 };
 
 Apu* apu_init(Snes* snes);
 void apu_free(Apu* apu);
 void apu_reset(Apu* apu);
-void apu_cycle(Apu* apu);
+int apu_runCycles(Apu* apu, int wantedCycles);
 uint8_t apu_read(Apu* apu, uint16_t adr);
 void apu_write(Apu* apu, uint16_t adr, uint8_t val);
 uint8_t apu_spcRead(void* mem, uint16_t adr);

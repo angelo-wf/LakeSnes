@@ -76,6 +76,7 @@ uint8_t snes_cpuRead(void* mem, uint32_t adr);
 void snes_cpuWrite(void* mem, uint32_t adr, uint8_t val);
 // debugging
 void snes_runCpuCycle(Snes* snes);
+void snes_runSpcCycle(Snes* snes);
 
 // snes_other.c functions:
 

@@ -51,23 +51,21 @@ Currently, only normal joypads are supported, and only controller 1 has controls
 
 Additionally, the following command are available:
 
-| Key | Action             |
-| --- | ------------------ |
-| R   | Soft reset         |
-| E   | Hard reset         |
-| P   | Pause              |
-| O   | Frame advance      |
-| T   | Turbo              |
-| L   | Run one CPU cycle  |
-| K   | Run one SPC cycle* |
-| J   | Dumps some data    |
-
-*: Does not work yet.
+| Key | Action            |
+| --- | ----------------- |
+| R   | Soft reset        |
+| E   | Hard reset        |
+| P   | Pause             |
+| O   | Frame advance     |
+| T   | Turbo             |
+| L   | Run one CPU cycle |
+| K   | Run one SPC cycle |
+| J   | Dumps some data   |
 
 Alt+Enter can be used to toggle fullscreen mode.
 
 L will run one CPU cycle, and then logs the CPU state (opcode, registers, flags).
-K does not function yet, but is planned to do the same, but for the SPC.
+K does the same, but for the SPC instead (note that this acts as additional SPC cycles).
 
 J currently dumps the 128K WRAM, 64K VRAM, 512B CGRAM, 544B OAM and 64K ARAM to a file called `dump.bin`.
 
@@ -80,7 +78,7 @@ Minimizing or hiding the window can cause high CPU usage as this can cause v-syn
 The emulator currently only supports regular LoROM and HiROM games (no co-processors and such).
 Battery saves are not retained yet. SPC files can also not be loaded yet.
 
-This emulator is definitely not fully accurate. The PPU renders per scanline, so mid-scanline effects are not supported. The DSP executes on a per-sample basis. The SPC is currently still opcode-based (although the SPC core itself is cycle-accurate). The CPU-side timing should be cycle-accurate now, but the exact timing of certain event is still somewhat off. Communication between the CPU and SPC is also not cycle-accurate.
+This emulator is definitely not fully accurate. The PPU renders per scanline, so mid-scanline effects are not supported. The DSP executes on a per-sample basis. The SPC and CPU-side timing should be cycle-accurate now, but the exact timing of certain event is still somewhat off. Communication between the CPU and SPC is also not cycle-accurate.
 
 Quite a few TODO's are scattered throughout the code for things that are currently not quite fully emulated, mostly related to edge cases and some lesser-used PPU features.
 

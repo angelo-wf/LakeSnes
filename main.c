@@ -133,10 +133,11 @@ int main(int argc, char** argv) {
               break;
             }
             case SDLK_k: {
-              // TODO: spc cycling
-              // char line[57];
-              // getProcessorStateSpc(snes, line);
-              // puts(line);
+              // run one spc cycle
+              snes_runSpcCycle(snes);
+              char line[57];
+              getProcessorStateSpc(snes, line);
+              puts(line);
               break;
             }
             case SDLK_RETURN: {

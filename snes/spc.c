@@ -1039,7 +1039,7 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       uint16_t ya = spc->a | (spc->y << 8);
       int result = ya + value;
       spc->v = (ya & 0x8000) == (value & 0x8000) && (value & 0x8000) != (result & 0x8000);
-      spc->h = ((ya & 0xfff) + (value & 0xfff) + 1) > 0xfff;
+      spc->h = ((ya & 0xfff) + (value & 0xfff)) > 0xfff;
       spc->c = result > 0xffff;
       spc->z = (result & 0xffff) == 0;
       spc->n = result & 0x8000;
