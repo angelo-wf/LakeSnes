@@ -15,6 +15,11 @@ static const int rateValues[32] = {
   10, 8, 6, 5, 4, 3, 2, 1
 };
 
+static const int rateOffsets[32] = {
+  0, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536,
+  0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0
+};
+
 static const int gaussValues[512] = {
   0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000, 0x000,
   0x001, 0x001, 0x001, 0x001, 0x001, 0x001, 0x001, 0x001, 0x001, 0x001, 0x001, 0x002, 0x002, 0x002, 0x002, 0x002,
@@ -50,6 +55,9 @@ static const int gaussValues[512] = {
   0x513, 0x514, 0x514, 0x515, 0x516, 0x516, 0x517, 0x517, 0x517, 0x518, 0x518, 0x518, 0x518, 0x518, 0x519, 0x519
 };
 
+static int clamp16(int val);
+static int clip16(int val);
+static bool dsp_checkCounter(Dsp* dsp, int rate);
 static void dsp_cycleChannel(Dsp* dsp, int ch);
 static void dsp_handleEcho(Dsp* dsp, int* outputL, int* outputR);
 static void dsp_handleGain(Dsp* dsp, int ch);
@@ -82,7 +90,6 @@ void dsp_reset(Dsp* dsp) {
     dsp->channel[i].older = 0;
     dsp->channel[i].useNoise = false;
     memset(dsp->channel[i].adsrRates, 0, sizeof(dsp->channel[i].adsrRates));
-    dsp->channel[i].rateCounter = 0;
     dsp->channel[i].adsrState = 0;
     dsp->channel[i].sustainLevel = 0;
     dsp->channel[i].useGain = false;
@@ -97,6 +104,7 @@ void dsp_reset(Dsp* dsp) {
     dsp->channel[i].volumeR = 0;
     dsp->channel[i].echoEnable = false;
   }
+  dsp->counter = 0;
   dsp->dirPage = 0;
   dsp->evenCycle = false;
   dsp->mute = true;
@@ -105,7 +113,6 @@ void dsp_reset(Dsp* dsp) {
   dsp->masterVolumeR = 0;
   dsp->noiseSample = -0x4000;
   dsp->noiseRate = 0;
-  dsp->noiseCounter = 0;
   dsp->echoWrites = false;
   dsp->echoVolumeL = 0;
   dsp->echoVolumeR = 0;
@@ -146,6 +153,21 @@ void dsp_cycle(Dsp* dsp) {
   // put final sample in the samplebuffer
   dsp->sampleBuffer[(dsp->sampleOffset & 0x3ff) * 2] = totalL;
   dsp->sampleBuffer[(dsp->sampleOffset++ & 0x3ff) * 2 + 1] = totalR;
+  // handle counter
+  dsp->counter = dsp->counter == 0 ? 30720 : dsp->counter - 1;
+}
+
+static int clamp16(int val) {
+  return val < -0x8000 ? -0x8000 : (val > 0x7fff ? 0x7fff : val);
+}
+
+static int clip16(int val) {
+  return (int16_t) (val & 0xffff);
+}
+
+static bool dsp_checkCounter(Dsp* dsp, int rate) {
+  if(rate == 0) return false;
+  return ((dsp->counter + rateOffsets[rate]) % rateValues[rate]) == 0;
 }
 
 static void dsp_handleEcho(Dsp* dsp, int* outputL, int* outputR) {
@@ -166,32 +188,32 @@ static void dsp_handleEcho(Dsp* dsp, int* outputL, int* outputR) {
     sumR += (dsp->firBufferR[(dsp->firBufferIndex + i + 1) & 0x7] * dsp->firValues[i]) >> 6;
     if(i == 6) {
       // clip to 16-bit before last addition
-      sumL = ((int16_t) (sumL & 0xffff)); // clip 16-bit
-      sumR = ((int16_t) (sumR & 0xffff)); // clip 16-bit
+      sumL = clip16(sumL);
+      sumR = clip16(sumR);
     }
   }
-  sumL = sumL < -0x8000 ? -0x8000 : (sumL > 0x7fff ? 0x7fff : sumL); // clamp 16-bit
-  sumR = sumR < -0x8000 ? -0x8000 : (sumR > 0x7fff ? 0x7fff : sumR); // clamp 16-bit
+  sumL = clamp16(sumL);
+  sumR = clamp16(sumR);
   // modify output with sum
   int outL = *outputL + ((sumL * dsp->echoVolumeL) >> 7);
   int outR = *outputR + ((sumR * dsp->echoVolumeR) >> 7);
-  *outputL = outL < -0x8000 ? -0x8000 : (outL > 0x7fff ? 0x7fff : outL); // clamp 16-bit
-  *outputR = outR < -0x8000 ? -0x8000 : (outR > 0x7fff ? 0x7fff : outR); // clamp 16-bit
+  *outputL = clamp16(outL);
+  *outputR = clamp16(outR);
   // get echo input
   int inL = 0, inR = 0;
   for(int i = 0; i < 8; i++) {
     if(dsp->channel[i].echoEnable) {
       inL += (dsp->channel[i].sampleOut * dsp->channel[i].volumeL) >> 6;
       inR += (dsp->channel[i].sampleOut * dsp->channel[i].volumeR) >> 6;
-      inL = inL < -0x8000 ? -0x8000 : (inL > 0x7fff ? 0x7fff : inL); // clamp 16-bit
-      inR = inR < -0x8000 ? -0x8000 : (inR > 0x7fff ? 0x7fff : inR); // clamp 16-bit
+      inL = clamp16(inL);
+      inR = clamp16(inR);
     }
   }
   // write this to ram
   inL += (sumL * dsp->feedbackVolume) >> 7;
   inR += (sumR * dsp->feedbackVolume) >> 7;
-  inL = inL < -0x8000 ? -0x8000 : (inL > 0x7fff ? 0x7fff : inL); // clamp 16-bit
-  inR = inR < -0x8000 ? -0x8000 : (inR > 0x7fff ? 0x7fff : inR); // clamp 16-bit
+  inL = clamp16(inL);
+  inR = clamp16(inR);
   inL &= 0xfffe;
   inR &= 0xfffe;
   if(dsp->echoWrites) {
@@ -246,6 +268,7 @@ static void dsp_cycleChannel(Dsp* dsp, int ch) {
       memset(dsp->channel[ch].decodeBuffer, 0, sizeof(dsp->channel[ch].decodeBuffer));
       dsp->channel[ch].gain = 0;
       dsp->channel[ch].adsrState = dsp->channel[ch].useGain ? 3 : 0;
+      dsp->ram[0x7c] &= ~(1 << ch); // clear ENDx
     }
   }
   // handle reset
@@ -255,14 +278,8 @@ static void dsp_cycleChannel(Dsp* dsp, int ch) {
   }
   // handle envelope/adsr
   bool doingDirectGain = dsp->channel[ch].adsrState != 4 && dsp->channel[ch].useGain && dsp->channel[ch].directGain;
-  uint16_t rate = dsp->channel[ch].adsrState == 4 ? 0 : dsp->channel[ch].adsrRates[dsp->channel[ch].adsrState];
-  if(dsp->channel[ch].adsrState != 4 && !doingDirectGain && rate != 0) {
-    dsp->channel[ch].rateCounter++;
-  }
-  if(dsp->channel[ch].adsrState == 4 || (!doingDirectGain && dsp->channel[ch].rateCounter >= rate && rate != 0)) {
-    if(dsp->channel[ch].adsrState != 4) dsp->channel[ch].rateCounter = 0;
-    dsp_handleGain(dsp, ch);
-  }
+  uint8_t rate = dsp->channel[ch].adsrState == 4 ? 31 : dsp->channel[ch].adsrRates[dsp->channel[ch].adsrState];
+  if(dsp_checkCounter(dsp, rate) && !doingDirectGain) dsp_handleGain(dsp, ch);
   if(doingDirectGain) dsp->channel[ch].gain = dsp->channel[ch].gainValue;
   // set outputs
   dsp->ram[(ch << 4) | 8] = dsp->channel[ch].gain >> 4;
@@ -381,7 +398,7 @@ static void dsp_decodeBrr(Dsp* dsp, int ch) {
       case 2: s += 2 * old + ((3 * -old) >> 5) - older + (older >> 4); break;
       case 3: s += 2 * old + ((13 * -old) >> 6) - older + ((3 * older) >> 4); break;
     }
-    s = s < -0x8000 ? -0x8000 : (s > 0x7fff ? 0x7fff : s); // clamp 16-bit
+    s = clamp16(s);
     s = ((int16_t) ((s & 0x7fff) << 1)) >> 1; // clip 15-bit
     older = old;
     old = s;
@@ -392,14 +409,10 @@ static void dsp_decodeBrr(Dsp* dsp, int ch) {
 }
 
 static void dsp_handleNoise(Dsp* dsp) {
-  if(dsp->noiseRate != 0) {
-    dsp->noiseCounter++;
-  }
-  if(dsp->noiseCounter >= dsp->noiseRate && dsp->noiseRate != 0) {
+  if(dsp_checkCounter(dsp, dsp->noiseRate)) {
     int bit = (dsp->noiseSample & 1) ^ ((dsp->noiseSample >> 1) & 1);
     dsp->noiseSample = ((dsp->noiseSample >> 1) & 0x3fff) | (bit << 14);
     dsp->noiseSample = ((int16_t) ((dsp->noiseSample & 0x7fff) << 1)) >> 1;
-    dsp->noiseCounter = 0;
   }
 }
 
@@ -431,24 +444,21 @@ void dsp_write(Dsp* dsp, uint8_t adr, uint8_t val) {
       break;
     }
     case 0x05: case 0x15: case 0x25: case 0x35: case 0x45: case 0x55: case 0x65: case 0x75: {
-      dsp->channel[ch].adsrRates[0] = rateValues[(val & 0xf) * 2 + 1];
-      dsp->channel[ch].adsrRates[1] = rateValues[((val & 0x70) >> 4) * 2 + 16];
+      dsp->channel[ch].adsrRates[0] = (val & 0xf) * 2 + 1;
+      dsp->channel[ch].adsrRates[1] = ((val & 0x70) >> 4) * 2 + 16;
       dsp->channel[ch].useGain = (val & 0x80) == 0;
       break;
     }
     case 0x06: case 0x16: case 0x26: case 0x36: case 0x46: case 0x56: case 0x66: case 0x76: {
-      dsp->channel[ch].adsrRates[2] = rateValues[val & 0x1f];
+      dsp->channel[ch].adsrRates[2] = val & 0x1f;
       dsp->channel[ch].sustainLevel = (((val & 0xe0) >> 5) + 1) * 0x100;
       break;
     }
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77: {
       dsp->channel[ch].directGain = (val & 0x80) == 0;
-      if(val & 0x80) {
-        dsp->channel[ch].gainMode = (val & 0x60) >> 5;
-        dsp->channel[ch].adsrRates[3] = rateValues[val & 0x1f];
-      } else {
-        dsp->channel[ch].gainValue = (val & 0x7f) * 16;
-      }
+      dsp->channel[ch].gainMode = (val & 0x60) >> 5;
+      dsp->channel[ch].adsrRates[3] = val & 0x1f;
+      dsp->channel[ch].gainValue = (val & 0x7f) * 16;
       break;
     }
     case 0x0c: {
@@ -483,7 +493,7 @@ void dsp_write(Dsp* dsp, uint8_t adr, uint8_t val) {
       dsp->reset = val & 0x80;
       dsp->mute = val & 0x40;
       dsp->echoWrites = (val & 0x20) == 0;
-      dsp->noiseRate = rateValues[val & 0x1f];
+      dsp->noiseRate = val & 0x1f;
       break;
     }
     case 0x7c: {

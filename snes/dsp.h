@@ -23,8 +23,7 @@ typedef struct DspChannel {
   int16_t older;
   bool useNoise;
   // adsr, envelope, gain
-  uint16_t adsrRates[4]; // attack, decay, sustain, gain
-  uint16_t rateCounter;
+  uint8_t adsrRates[4]; // attack, decay, sustain, gain
   uint8_t adsrState; // 0: attack, 1: decay, 2: sustain, 3: gain, 4: release
   uint16_t sustainLevel;
   bool useGain;
@@ -49,6 +48,7 @@ struct Dsp {
   // 8 channels
   DspChannel channel[8];
   // overarching
+  uint16_t counter;
   uint16_t dirPage;
   bool evenCycle;
   bool mute;
@@ -57,8 +57,7 @@ struct Dsp {
   int8_t masterVolumeR;
   // noise
   int16_t noiseSample;
-  uint16_t noiseRate;
-  uint16_t noiseCounter;
+  uint8_t noiseRate;
   // echo
   bool echoWrites;
   int8_t echoVolumeL;

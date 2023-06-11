@@ -8,43 +8,35 @@ The following is a non-exhaustive list of games that have emulation bugs. Note t
 Generally, at least the following general issues seem at play:
 - Something with the DSP not releasing notes properly, causing music and sfx to sound off
 - Something with the audio-engine used in games developed by Enix causing issues and freezes
-- A possible bug in the SPC (or also DSP?) causing some sound-issues that do not occur in SnesJs
 
 ## List
 
-- Actraiser
-  - Music sounds off (wrong samples)
-  - Audio freezes when stating new game, game freezes at following SPC upload
 - Actraiser 2
   - Freezes after splash-screen (stuck in SPC upload)
 - Aladdin
-  - Music and sounds effects sound off (not released properly?)
+  - Music sound off (notes not released properly)
 - Air Strike Patrol
   - Bugs due to not emulating mid-scanline effects
   - Some sound effects sound off, and start mixing into the music
 - Battle Grand Prix
-  - Audio freezes after pressing start, game freezes at following SPC upload
+  - Audio freezes after pressing start (SPC stuck in upload loop), game freezes at following SPC upload
 - Breath of fire 2
   - Sound effects sound off (not released properly?)
 - Cybernator
-  - Sound effects sound off (not released properly?)
+  - Some sound effects keep going after ending
 - Death Brade
   - Match ends instantly
 - Final Fantasy II
   - Music sounds somewhat off (some instruments)
-- Final Fantasy III
-  - Freezes after intro (stuck in SPC upload)
-- Ghouls 'n Ghosts
-  - Music and sound effects sounds off (not released properly?)
+- Super Ghouls 'n Ghosts
+  - Music sounds off (notes not released properly?)
 - Hiouden - Mamono-tachi to no Chikai
-  - Initial music sounds off
-  - gets stuck on Japanese warning screen after splash-screen
+  - Initial music is missing (?, should there be music?)
+  - gets stuck on SPC upload after intro
 - Home Alone 2
-  - Music and sound effects sound off
+  - Music and sound effects sound extremely off
 - Hook
   - Intros have incorrect colours and glitchy text
-- King of Dragons
-  - Music on title screen sounds wrong
 - Mecarobot Golf
   - Some odd flashing of the ground in-game during movement
   - Sometimes freezes (?, hard to reproduce, happened once in lesson mode)
@@ -53,18 +45,12 @@ Generally, at least the following general issues seem at play:
   - Freezes when pressing start (stuck in SPC upload)  
 - Jurassic Park
   - Sides of screen are not masked properly
-- Jurassic Park 2
-  - Music sounds off (wrong samples) *[does not happen in SnesJS]*
 - Power Drive
   - Broken graphics on name select screen
-  - Cannot move once in-game (?)
+  - Cannot control once in-game, only pause
 - Rendering Ranger R2
   - Freezes on boot (stuck in SPC upload)
-- S.O.S. Sink or Swim
-  - Music sounds off, sound effects are missing
 - Soul Blazer
-  - Music sounds off (wrong samples)
-- Taz-Mania
-  - Audio breaks during gameplay (might cause game freeze at following SPC upload)
+  - Music sounds slightly off (missing drums on title intro)
 - Toy Story
-  - Odd noise when starting a new level, some sound effects keep going during and when exiting levels *[does not happen in SnesJS]*
+  - Some sound effect keep playing when unintended
