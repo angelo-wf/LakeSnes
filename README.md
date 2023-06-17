@@ -3,7 +3,7 @@ A SNES emulator, in C
 
 ## About
 
-This is a SNES emulator, written in C, mostly as a followup on my [earlier Javascript version](https://github.com/elzo-d/SnesJs). The main drive behind rewriting it in C was C's speed. The JS version could barely run at 20 FPS on my system, whereas this C version runs at full speed.
+This is a SNES emulator, written in C, mostly as a followup on my [earlier Javascript version](https://github.com/angelo-wf/SnesJs). The main drive behind rewriting it in C was C's speed. The JS version could barely run at 20 FPS on my system, whereas this C version runs at full speed.
 
 The intent is for it to be formed as a library, which could then be used in other projects. (Maybe it could be compiled for the web with Emscripten as well, to replace the core from that JS emulator).
 
