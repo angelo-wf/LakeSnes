@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
   SDL_AudioSpec want, have;
   SDL_AudioDeviceID device;
   SDL_memset(&want, 0, sizeof(want));
-  want.freq = 44100;
+  want.freq = 48000;
   want.format = AUDIO_S16;
   want.channels = 2;
   want.samples = 2048;
@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
   uint64_t lastCount = SDL_GetPerformanceCounter();
   float timeAdder = 0.0;
   float wanted = 1.0 / (snes->palTiming ? 50.0 : 60.0);
-  int wantedSamples = snes->palTiming ? 882 : 735;
+  int wantedSamples = want.freq / (snes->palTiming ? 50 : 60);
 
   while(running) {
     while(SDL_PollEvent(&event)) {
@@ -171,7 +171,7 @@ int main(int argc, char** argv) {
           if(loaded) setTitle(window, droppedFile);
           SDL_free(droppedFile);
           wanted = 1.0 / (snes->palTiming ? 50.0 : 60.0);
-          wantedSamples = snes->palTiming ? 882 : 735;
+          wantedSamples = want.freq / (snes->palTiming ? 50 : 60);
           break;
         }
       }

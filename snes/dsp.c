@@ -136,13 +136,13 @@ void dsp_cycle(Dsp* dsp) {
     dsp_cycleChannel(dsp, i);
     totalL += (dsp->channel[i].sampleOut * dsp->channel[i].volumeL) >> 6;
     totalR += (dsp->channel[i].sampleOut * dsp->channel[i].volumeR) >> 6;
-    totalL = totalL < -0x8000 ? -0x8000 : (totalL > 0x7fff ? 0x7fff : totalL); // clamp 16-bit
-    totalR = totalR < -0x8000 ? -0x8000 : (totalR > 0x7fff ? 0x7fff : totalR); // clamp 16-bit
+    totalL = clamp16(totalL);
+    totalR = clamp16(totalR);
   }
   totalL = (totalL * dsp->masterVolumeL) >> 7;
   totalR = (totalR * dsp->masterVolumeR) >> 7;
-  totalL = totalL < -0x8000 ? -0x8000 : (totalL > 0x7fff ? 0x7fff : totalL); // clamp 16-bit
-  totalR = totalR < -0x8000 ? -0x8000 : (totalR > 0x7fff ? 0x7fff : totalR); // clamp 16-bit
+  totalL = clamp16(totalL);
+  totalR = clamp16(totalR);
   dsp_handleEcho(dsp, &totalL, &totalR);
   if(dsp->mute) {
     totalL = 0;
