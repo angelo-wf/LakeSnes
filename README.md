@@ -78,7 +78,7 @@ Minimizing or hiding the window can cause high CPU usage as this can cause v-syn
 The emulator currently only supports regular LoROM and HiROM games (no co-processors and such).
 Battery saves are not retained yet. SPC files can also not be loaded yet.
 
-This emulator is definitely not fully accurate. The PPU renders per scanline, so mid-scanline effects are not supported. The DSP executes on a per-sample basis and decodes entire BRR samples at once. The SPC and CPU-side timing should be cycle-accurate now, but the exact timing of certain event is still somewhat off. Communication between the CPU and SPC is also not cycle-accurate.
+This emulator is definitely not fully accurate. The PPU renders per scanline, so mid-scanline effects are not supported. The DSP executes on a per-sample basis. The SPC and CPU-side timing should be cycle-accurate now, but the exact timing of certain event is still somewhat off. Communication between the CPU and SPC is also not cycle-accurate.
 
 Quite a few TODO's are scattered throughout the code for things that are currently not quite fully emulated, mostly related to edge cases and some lesser-used PPU features.
 
@@ -98,11 +98,12 @@ This project is licensed under the MIT license. See 'LICENSE.txt' for details.
 - The [SuperFamicon wiki](https://wiki.superfamicom.org).
 - The [SnesDev Wiki](https://snesdev.mesen.ca/wiki/index.php?title=Main_Page) by Sour (seems to be abadoned).
 - The [SnesDev Wiki](https://snes.nesdev.org/wiki/Main_Page) at NesDev.
-- Some quick peeks at Sour's [Mesen-S source](https://github.com/SourMesen/Mesen-S).
-- Some quick peeks at Byuu's [Higan source](https://github.com/byuu/higan).
+- Some quick peeks at Sour's [Mesen-S source](https://github.com/SourMesen/Mesen-S), nuw superseeded by [Mesen 2](https://github.com/SourMesen/Mesen2).
+- Some quick peeks at [Higan's source](https://github.com/higan-emu/higan), [Bsnes' source](https://github.com/bsnes-emu/bsnes) and [Ares' source](https://github.com/ares-emulator/ares), all formely by Near.
 - The [nocach fullsnes document](https://problemkaputt.de/fullsnes.txt).
 - Some posts and resources in the [SnesDev section](https://forums.nesdev.org/viewforum.php?f=12) of the NesDev forums.
 - The [Super NES Programming pages](https://en.wikibooks.org/wiki/Super_NES_Programming) in Wikibooks.
+- Anomie's docs from [Romhacking.net](https://www.romhacking.net/community/548/).
 - Various roms (especially the CPU tests) by PeterLemon/krom found [here](https://github.com/PeterLemon/SNES).
 - The 65816 tests by TomHarte found [here](https://github.com/TomHarte/ProcessorTests).
 - The SPC700 tests by raddad772 found [here](https://github.com/raddad772/jsmoo/tree/main/misc/tests/GeneratedTests) (part of JSmoo, a JS-based set of emulators; tests also included in TomHarte's repo).

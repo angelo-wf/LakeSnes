@@ -15,21 +15,24 @@ typedef struct DspChannel {
   uint16_t pitchCounter;
   bool pitchModulation;
   // brr decoding
-  int16_t decodeBuffer[19]; // 16 samples per brr-block, +3 for interpolation
+  int16_t decodeBuffer[12];
+  uint8_t bufferOffset;
   uint8_t srcn;
   uint16_t decodeOffset;
-  uint8_t previousFlags; // from last sample
-  int16_t old;
-  int16_t older;
+  uint8_t blockOffset; // offset within brr block
+  uint8_t brrHeader;
   bool useNoise;
+  uint8_t startDelay;
   // adsr, envelope, gain
   uint8_t adsrRates[4]; // attack, decay, sustain, gain
-  uint8_t adsrState; // 0: attack, 1: decay, 2: sustain, 3: gain, 4: release
-  uint16_t sustainLevel;
+  uint8_t adsrState; // 0: attack, 1: decay, 2: sustain, 3: release
+  uint8_t sustainLevel;
+  uint8_t gainSustainLevel;
   bool useGain;
   uint8_t gainMode;
   bool directGain;
   uint16_t gainValue; // for direct gain
+  uint16_t preclampGain; // for bent increase
   uint16_t gain;
   // keyon/off
   bool keyOn;
@@ -55,6 +58,11 @@ struct Dsp {
   bool reset;
   int8_t masterVolumeL;
   int8_t masterVolumeR;
+  // accumulation
+  int16_t sampleOutL;
+  int16_t sampleOutR;
+  int16_t echoOutL;
+  int16_t echoOutR;
   // noise
   int16_t noiseSample;
   uint8_t noiseRate;
@@ -65,7 +73,7 @@ struct Dsp {
   int8_t feedbackVolume;
   uint16_t echoBufferAdr;
   uint16_t echoDelay;
-  uint16_t echoRemain;
+  uint16_t echoLength;
   uint16_t echoBufferIndex;
   uint8_t firBufferIndex;
   int8_t firValues[8];

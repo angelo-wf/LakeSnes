@@ -1,6 +1,16 @@
+# System files
 .DS_Store
-*.dSYM
+# Executables
 elzsnes
 lakesnes
+lakesnes_*
+# Created files
 dump.bin
+# sdl2 directory
 sdl2
+# Build results/libraries
+*.o
+*.a
+*.so
+*.dylib
+*.dSYM
