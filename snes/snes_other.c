@@ -94,7 +94,8 @@ bool snes_loadRom(Snes* snes, const uint8_t* data, int length) {
     test *= 2;
   }
   // load it
-  printf("Loaded %s rom\n\"%s\"\n", headers[used].cartType == 2 ? "HiROM" : "LoROM", headers[used].name);
+  printf("Loaded %s rom (%s)\n", headers[used].cartType == 2 ? "HiROM" : "LoROM", headers[used].pal ? "PAL" : "NTSC");
+  printf("\"%s\"\n", headers[used].name);
   cart_load(
     snes->cart, headers[used].cartType,
     newData, newLength, headers[used].chips > 0 ? headers[used].ramSize : 0

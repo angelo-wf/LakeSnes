@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
     printf("Failed to open audio device: %s\n", SDL_GetError());
     return 1;
   }
-  int16_t* audioBuffer = malloc(882 * 4); // *2 for stereo, *2 for sizeof(int16)
+  int16_t* audioBuffer = malloc(want.freq / 50 * 4); // *2 for stereo, *2 for sizeof(int16)
   SDL_PauseAudioDevice(device, 0);
   // print version
   SDL_version version;
