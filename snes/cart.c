@@ -11,6 +11,7 @@
 static uint8_t cart_readLorom(Cart* cart, uint8_t bank, uint16_t adr);
 static void cart_writeLorom(Cart* cart, uint8_t bank, uint16_t adr, uint8_t val);
 static uint8_t cart_readHirom(Cart* cart, uint8_t bank, uint16_t adr);
+static uint8_t cart_readExHirom(Cart* cart, uint8_t bank, uint16_t adr);
 static void cart_writeHirom(Cart* cart, uint8_t bank, uint16_t adr, uint8_t val);
 
 Cart* cart_init(Snes* snes) {
@@ -53,6 +54,7 @@ uint8_t cart_read(Cart* cart, uint8_t bank, uint16_t adr) {
     case 0: return cart->snes->openBus;
     case 1: return cart_readLorom(cart, bank, adr);
     case 2: return cart_readHirom(cart, bank, adr);
+    case 3: return cart_readExHirom(cart, bank, adr);
   }
   return cart->snes->openBus;
 }
@@ -62,6 +64,7 @@ void cart_write(Cart* cart, uint8_t bank, uint16_t adr, uint8_t val) {
     case 0: break;
     case 1: cart_writeLorom(cart, bank, adr, val); break;
     case 2: cart_writeHirom(cart, bank, adr, val); break;
+    case 3: cart_writeHirom(cart, bank, adr, val); break;
   }
 }
 
@@ -94,6 +97,20 @@ static uint8_t cart_readHirom(Cart* cart, uint8_t bank, uint16_t adr) {
   if(adr >= 0x8000 || bank >= 0x40) {
     // adr 8000-ffff in all banks or all addresses in banks 40-7f and c0-ff
     return cart->rom[(((bank & 0x3f) << 16) | adr) & (cart->romSize - 1)];
+  }
+  return cart->snes->openBus;
+}
+
+static uint8_t cart_readExHirom(Cart* cart, uint8_t bank, uint16_t adr) {
+  if((bank & 0x7f) < 0x40 && adr >= 0x6000 && adr < 0x8000 && cart->ramSize > 0) {
+    // banks 00-3f and 80-bf, adr 6000-7fff
+    return cart->ram[(((bank & 0x3f) << 13) | (adr & 0x1fff)) & (cart->ramSize - 1)];
+  }
+  bool secondHalf = bank < 0x80;
+  bank &= 0x7f;
+  if(adr >= 0x8000 || bank >= 0x40) {
+    // adr 8000-ffff in all banks or all addresses in banks 40-7f and c0-ff
+    return cart->rom[(((bank & 0x3f) << 16) | (secondHalf ? 0x400000 : 0) | adr) & (cart->romSize - 1)];
   }
   return cart->snes->openBus;
 }

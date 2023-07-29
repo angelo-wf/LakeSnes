@@ -47,19 +47,21 @@ bool snes_loadRom(Snes* snes, const uint8_t* data, int length) {
     return false;
   }
   // check headers
-  CartHeader headers[4];
+  CartHeader headers[6];
   memset(headers, 0, sizeof(headers));
-  for(int i = 0; i < 4; i++) {
+  for(int i = 0; i < 6; i++) {
     headers[i].score = -50;
   }
-  if(length >= 0x8000) readHeader(data, length, 0x7fc0, &headers[0]);
-  if(length >= 0x8200) readHeader(data, length, 0x81c0, &headers[1]);
-  if(length >= 0x10000) readHeader(data, length, 0xffc0, &headers[2]);
-  if(length >= 0x10200) readHeader(data, length, 0x101c0, &headers[3]);
-  // see which it is
+  if(length >= 0x8000) readHeader(data, length, 0x7fc0, &headers[0]); // lorom
+  if(length >= 0x8200) readHeader(data, length, 0x81c0, &headers[1]); // lorom + header
+  if(length >= 0x10000) readHeader(data, length, 0xffc0, &headers[2]); // hirom
+  if(length >= 0x10200) readHeader(data, length, 0x101c0, &headers[3]); // hirom + header
+  if(length >= 0x410000) readHeader(data, length, 0x40ffc0, &headers[4]); // exhirom
+  if(length >= 0x410200) readHeader(data, length, 0x4101c0, &headers[5]); // exhirom + header
+  // see which it is, go backwards to allow picking ExHiROM over HiROM for roms with headers in both spots
   int max = 0;
   int used = 0;
-  for(int i = 0; i < 4; i++) {
+  for(int i = 5; i >= 0; i--) {
     if(headers[i].score > max) {
       max = headers[i].score;
       used = i;
@@ -71,7 +73,7 @@ bool snes_loadRom(Snes* snes, const uint8_t* data, int length) {
     length -= 0x200; // and subtract from size
   }
   // check if we can load it
-  if(headers[used].cartType > 2) {
+  if(headers[used].cartType > 3) {
     printf("Failed to load rom: unsupported type (%d)\n", headers[used].cartType);
     return false;
   }
@@ -94,7 +96,8 @@ bool snes_loadRom(Snes* snes, const uint8_t* data, int length) {
     test *= 2;
   }
   // load it
-  printf("Loaded %s rom (%s)\n", headers[used].cartType == 2 ? "HiROM" : "LoROM", headers[used].pal ? "PAL" : "NTSC");
+  const char* typeNames[4] = {"(none)", "LoROM", "HiROM", "ExHiROM"};
+  printf("Loaded %s rom (%s)\n", typeNames[headers[used].cartType], headers[used].pal ? "PAL" : "NTSC");
   printf("\"%s\"\n", headers[used].name);
   cart_load(
     snes->cart, headers[used].cartType,
@@ -192,6 +195,7 @@ static void readHeader(const uint8_t* data, int length, int location, CartHeader
   // get region
   header->pal = (header->region >= 0x2 && header->region <= 0xc) || header->region == 0x11;
   header->cartType = location < 0x9000 ? 1 : 2;
+  if(location > 0x400000) header->cartType = 3;
   // get score
   // TODO: check name, maker/game-codes (if V3) for ASCII, more vectors,
   //   more first opcode, rom-sizes (matches?), type (matches header location?)

@@ -37,3 +37,5 @@ Generally, at least the following general issues seem at play:
   - Freezes on boot (stuck in SPC upload)
 - Soul Blazer
   - Music sounds slightly off (missing drums on title intro)
+- Tales of Phantasia
+  - Sound effects and music sound off (wrong samples?)
