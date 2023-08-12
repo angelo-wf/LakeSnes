@@ -5,13 +5,13 @@ A SNES emulator, in C
 
 This is a SNES emulator, written in C, mostly as a followup on my [earlier Javascript version](https://github.com/angelo-wf/SnesJs). The main drive behind rewriting it in C was C's speed. The JS version could barely run at 20 FPS on my system, whereas this C version runs at full speed.
 
-The intent is for it to be formed as a library, which could then be used in other projects. (Maybe it could be compiled for the web with Emscripten as well, to replace the core from that JS emulator).
+The intent is for the acutal emulation itself to be split off into a library, which can then be used in other projects. (Maybe it could be compiled for the web with Emscripten as well, to replace the core from that JS emulator). This is not done yet, and as of now a full emulator with basic frontend (using [SDL2](https://www.libsdl.org)) is build.
 
 Performance, although much better than my JS version, is still quite bad though, especially when compared to emulators like BSNES or SNES9X (it used around 80% of one core whereas SNES9X only used around 15%, on my old hardware).
 
 ## Compiling
 
-### MacOS
+### MacOS (plain executable)
 
 - Install [homebrew](https://brew.sh) (This also install the Xcode CLI-tools, providing clang and make)
 - Install SDL2 with homebrew: `brew install sdl2`
@@ -19,13 +19,20 @@ Performance, although much better than my JS version, is still quite bad though,
 
 This build depends on SDL2 being installed with homebrew.
 
+### MacOS (app-bundle)
+
+- Make sure clang and make are available (from the Xcode CLI-tools)
+- Download the latest SDL2 build (the `.dmg`) from the [SDL2 Releases](https://github.com/libsdl-org/SDL/releases)
+- Create a directory called `sdl2` in this repo's directory and copy `SDL2.framework` from the dmg into it
+- Run `make LakeSnes.app`
+
+This is a stand-alone application and shows up in the 'open with' menu for smc, sfc and zip files.
+
 ### Linux
 
-NOTE: The makefile is setup for compiling with clang, but using gcc works as well with `make CC=gcc`.
-
 - Make sure clang (or gcc) and make are available
-- Get SDL2-dev via your package manager (Ubuntu/debian: `sudo apt install libsdl2-dev`)
-- Run `make`
+- Get SDL2-dev via your package manager (Ubuntu/Debian: `sudo apt install libsdl2-dev`)
+- Run `make` (or `make CC=gcc` to use gcc)
 
 This build depends on SDL2 being installed.
 
@@ -40,7 +47,7 @@ NOTE: Only tested with Msys2 and clang, but gcc should work as well, and using o
 - Navigate to where this repo was cloned (`cd /c/Users/...`)
 - Run `mingw32-make`
 - Download the latest SDL2 build (the `...-win32-x64.zip`) from the [SDL2 Releases](https://github.com/libsdl-org/SDL/releases)
-- Copy `SDL2.dll` from it into this directory (next to `lakesnes.exe`)
+- Copy `SDL2.dll` from it into this repo's directory (next to the build `lakesnes.exe`)
 
 This build depends on `SDL2.dll` being placed next to the executable.
 

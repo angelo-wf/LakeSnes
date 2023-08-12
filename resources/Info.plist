@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+      	<string>smc</string>
+        <string>sfc</string>
+      </array>
+      <key>CFBundleTypeName</key>
+      <string>SNES ROM Image</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+      	<string>zip</string>
+      </array>
+      <key>CFBundleTypeName</key>
+      <string>ZIP Archive</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+    </dict>
+  </array>
+  <key>CFBundleExecutable</key>
+  <string>lakesnes_app</string>
+  <key>CFBundleIconFile</key>
+  <string>appicon.icns</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.elzod.lakesnes</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>LakeSnes</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundleSupportedPlatforms</key>
+  <array>
+    <string>MacOSX</string>
+  </array>
+  <key>CFBundleVersion</key>
+  <string>2</string>
+</dict>
+</plist>

@@ -5,7 +5,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef SDL2SUBDIR
+#include "SDL2/SDL.h"
+#else
 #include "SDL.h"
+#endif
 
 #include "zip.h"
 
