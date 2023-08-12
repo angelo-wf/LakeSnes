@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <SDL2/SDL.h>
+#include "SDL.h"
 
 #include "zip.h"
 
@@ -77,8 +77,13 @@ int main(int argc, char** argv) {
   SDL_PauseAudioDevice(device, 0);
   // print version
   SDL_version version;
+  SDL_version compiledVersion;
   SDL_GetVersion(&version);
-  printf("LakeSnes - Running with SDL %d.%d.%d\n", version.major, version.minor, version.patch);
+  SDL_VERSION(&compiledVersion);
+  printf(
+    "LakeSnes - Running with SDL %d.%d.%d (compiled with %d.%d.%d)\n",
+    version.major, version.minor, version.patch, compiledVersion.major, compiledVersion.minor, compiledVersion.patch
+  );
   // init snes, load rom
   Snes* snes = snes_init();
   bool loaded = false;

@@ -13,4 +13,5 @@ sdl2
 *.a
 *.so
 *.dylib
+*.dll
 *.dSYM

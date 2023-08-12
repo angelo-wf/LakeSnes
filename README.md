@@ -13,20 +13,36 @@ Performance, although much better than my JS version, is still quite bad though,
 
 ### MacOS
 
-- Make sure `clang` and `make` are available (`xcode-select --install`)
-- Download the SDL2 `.dmg` via the releases on the [SDL Github](https://github.com/libsdl-org/SDL)
-- Place the `SDL2.framework` found in the disk image in a subdirectory called `sdl2`
+- Install [homebrew](https://brew.sh) (This also install the Xcode CLI-tools, providing clang and make)
+- Install SDL2 with homebrew: `brew install sdl2`
 - Run `make`
+
+This build depends on SDL2 being installed with homebrew.
 
 ### Linux
 
-- Make sure `gcc` and `make` are available (`sudo apt install build-essential`)
-- Get SDL2-dev via the package manager (`sudo apt install libsdl2-dev`)
+NOTE: The makefile is setup for compiling with clang, but using gcc works as well with `make CC=gcc`.
+
+- Make sure clang (or gcc) and make are available
+- Get SDL2-dev via your package manager (Ubuntu/debian: `sudo apt install libsdl2-dev`)
 - Run `make`
 
-Note that these build are dependend on SDL2 being installed / found in `./sdl2`.
+This build depends on SDL2 being installed.
 
-Compiling on Windows will most likely require something like Cygwin/Mingw/Msys2, or WSL. This is left as an exercise for the reader (for now).
+### Windows
+
+NOTE: Only tested with Msys2 and clang, but gcc should work as well, and using other environments (Cygwin, Mingw, etc) might also be possible.
+
+- Install [Msys2](https://www.msys2.org)
+- Open a `clang64` environment (and run `pacman -Suy`)
+- Install clang and make: `pacman -S mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-make`
+- Install SDL2: `pacman -S mingw-w64-clang-x86_64-SDL2`
+- Navigate to where this repo was cloned (`cd /c/Users/...`)
+- Run `mingw32-make`
+- Download the latest SDL2 build (the `...-win32-x64.zip`) from the [SDL2 Releases](https://github.com/libsdl-org/SDL/releases)
+- Copy `SDL2.dll` from it into this directory (next to `lakesnes.exe`)
+
+This build depends on `SDL2.dll` being placed next to the executable.
 
 ## Usage and controls
 

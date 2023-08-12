@@ -1,12 +1,6 @@
 
-unames := $(shell uname -s)
-ifeq ($(unames), Darwin)
-	CC = clang
-	sdlflags = -framework SDL2 -F sdl2 -rpath @executable_path/sdl2
-else
-	CC = gcc
-	sdlflags = `sdl2-config --cflags --libs`
-endif
+CC = clang
+sdlflags = `sdl2-config --cflags --libs`
 
 CFLAGS = -O3 -I ./snes -I ./zip
 
