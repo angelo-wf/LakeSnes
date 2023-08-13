@@ -38,7 +38,7 @@ This build depends on SDL2 being installed.
 
 ### Windows
 
-NOTE: Only tested with Msys2 and clang, but gcc should work as well, and using other environments (Cygwin, Mingw, etc) or Visual Studio might also be possible.
+NOTE: Only tested with Msys2 using clang for x86_64, but building for arm64 should work as well, and using gcc, other environments, other tools (Cygwin, Mingw, etc) or Visual Studio might also be possible.
 
 - Install [Msys2](https://www.msys2.org)
 - Open a `clang64` environment (and run `pacman -Suy`)
@@ -46,8 +46,7 @@ NOTE: Only tested with Msys2 and clang, but gcc should work as well, and using o
 - Install SDL2: `pacman -S mingw-w64-clang-x86_64-SDL2`
 - Navigate to this repo's directory (`cd /c/Users/...`)
 - Run `mingw32-make lakesnes.exe` (or `mingw32-make` to build iconless exe)
-- Download the latest SDL2 build (the `...-win32-x64.zip`) from the [SDL2 Releases](https://github.com/libsdl-org/SDL/releases)
-- Copy `SDL2.dll` from it into this repo's directory (next to the build `lakesnes.exe`)
+- Run `cp /clang64/bin/SDL2.dll .` (to copy `SDL2.dll`)
 
 This build depends on `SDL2.dll` being placed next to the executable.
 

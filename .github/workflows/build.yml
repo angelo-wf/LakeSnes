@@ -22,13 +22,14 @@ jobs:
         with:
           filename: lakesnes_linux.zip
           path: lakesnes LICENSE.txt
-      - name: Publsh artifact
+      - name: Publish artifact
         uses: actions/upload-artifact@v3
         with:
           name: LakeSnes (Linux)
           path: lakesnes_linux.zip
   
   build_macos:
+    if: false # temporary
     runs-on: macos-latest
     steps:
       - name: Checkout repo
@@ -49,8 +50,35 @@ jobs:
         with:
           filename: lakesnes_macos.zip
           path: LakeSnes.app LICENSE.txt
-      - name: Publsh artifact
+      - name: Publish artifact
         uses: actions/upload-artifact@v3
         with:
           name: LakeSnes (macOS)
           path: lakesnes_macos.zip
+  
+  build_windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: clang64
+          update: true
+          install: mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-make mingw-w64-clang-x86_64-SDL2
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          mingw32-make lakesnes.exe
+          cp /clang64/bin/SDL2.dll .
+      - name: Create zip
+        uses: thedoctor0/zip-release@0.7.1
+        with:
+          filename: lakesnes_windows.zip
+          path: lakesnes.exe SDL2.dll LICENSE.txt
+      - name: Publish artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: LakeSnes (Windows)
+          path: lakesnes_windows.zip
