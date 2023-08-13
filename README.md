@@ -5,7 +5,7 @@ A SNES emulator, in C
 
 This is a SNES emulator, written in C, mostly as a followup on my [earlier Javascript version](https://github.com/angelo-wf/SnesJs). The main drive behind rewriting it in C was C's speed. The JS version could barely run at 20 FPS on my system, whereas this C version runs at full speed.
 
-The intent is for the acutal emulation itself to be split off into a library, which can then be used in other projects. (Maybe it could be compiled for the web with Emscripten as well, to replace the core from that JS emulator). This is not done yet, and as of now a full emulator with basic frontend (using [SDL2](https://www.libsdl.org)) is build.
+The intent is for the actual emulation itself to be split off into a library, which can then be used in other projects. (Maybe it could be compiled for the web with Emscripten as well, to replace the core from that JS emulator). This is not done yet, and as of now a full emulator with basic frontend (using [SDL2](https://www.libsdl.org)) is build.
 
 Performance, although much better than my JS version, is still quite bad though, especially when compared to emulators like BSNES or SNES9X (it used around 80% of one core whereas SNES9X only used around 15%, on my old hardware).
 
@@ -31,21 +31,21 @@ This is a stand-alone application and shows up in the 'open with' menu for smc, 
 ### Linux
 
 - Make sure clang (or gcc) and make are available
-- Get SDL2-dev via your package manager (Ubuntu/Debian: `sudo apt install libsdl2-dev`)
+- Get SDL2-dev via the package manager (Ubuntu/Debian: `sudo apt install libsdl2-dev`)
 - Run `make` (or `make CC=gcc` to use gcc)
 
 This build depends on SDL2 being installed.
 
 ### Windows
 
-NOTE: Only tested with Msys2 and clang, but gcc should work as well, and using other environments (Cygwin, Mingw, etc) might also be possible.
+NOTE: Only tested with Msys2 and clang, but gcc should work as well, and using other environments (Cygwin, Mingw, etc) or Visual Studio might also be possible.
 
 - Install [Msys2](https://www.msys2.org)
 - Open a `clang64` environment (and run `pacman -Suy`)
 - Install clang and make: `pacman -S mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-make`
 - Install SDL2: `pacman -S mingw-w64-clang-x86_64-SDL2`
-- Navigate to where this repo was cloned (`cd /c/Users/...`)
-- Run `mingw32-make`
+- Navigate to this repo's directory (`cd /c/Users/...`)
+- Run `mingw32-make lakesnes.exe` (or `mingw32-make` to build iconless exe)
 - Download the latest SDL2 build (the `...-win32-x64.zip`) from the [SDL2 Releases](https://github.com/libsdl-org/SDL/releases)
 - Copy `SDL2.dll` from it into this repo's directory (next to the build `lakesnes.exe`)
 
@@ -53,7 +53,7 @@ This build depends on `SDL2.dll` being placed next to the executable.
 
 ## Usage and controls
 
-The emulator can be run with `./lakesnes` and takes an optional path to a ROM-file to open. ROM-files can also be dragged on the emulator window to open them. ZIP-files also work, the first file within with a `.smc` or `.sfc` will be loaded (zip support uses [this](https://github.com/kuba--/zip) zip-library, which uses Miniz, both under the Unlicence).
+The emulator can be run by opening `lakesnes` directly or by running `./lakesnes`, taking an optional path to a ROM-file to open. ROM-files can also be dragged on the emulator window to open them. ZIP-files also work, the first file within with a `.smc` or `.sfc` will be loaded (zip support uses [this](https://github.com/kuba--/zip) zip-library, which uses Miniz, both under the Unlicence).
 
 Currently, only normal joypads are supported, and only controller 1 has controls set up.
 
@@ -111,7 +111,9 @@ Some games that I have tested seem to run without obvious issues, although some 
 
 ## License
 
-This project is licensed under the MIT license. See 'LICENSE.txt' for details.
+This project is licensed under the MIT license, see 'LICENSE.txt' for details.
+
+It uses 'kuba--/zip' which is under the Unlicense, and links against SDL2 which is under the zlib license.
 
 ## Resources
 
@@ -132,4 +134,5 @@ This project is licensed under the MIT license. See 'LICENSE.txt' for details.
 - The SPC700 tests by raddad772 found [here](https://github.com/raddad772/jsmoo/tree/main/misc/tests/GeneratedTests) (part of JSmoo, a JS-based set of emulators; tests also included in TomHarte's repo).
 - Various SPC and DSP test by Blargg (from [here](https://forums.nesdev.org/viewtopic.php?f=12&t=10697&p=121027#p121027) and [here](https://forums.nesdev.org/viewtopic.php?f=12&t=18005)).
 - The source for the BRR-tools from [SMW central](https://www.smwcentral.net), found [here](https://github.com/jimbo1qaz/BRRtools/tree/32-bit-samples).
+- [SDL2](https://www.libsdl.org) is used for the frontend window/rendering/audio/input handling.
 - [This](https://github.com/kuba--/zip) zip-library is used for zipped rom loading support.

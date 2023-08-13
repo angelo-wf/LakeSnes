@@ -4,6 +4,7 @@
 elzsnes
 lakesnes
 lakesnes_*
+lakesnes.*
 LakeSnes.app
 # Created files
 dump.bin
@@ -15,4 +16,5 @@ sdl2
 *.so
 *.dylib
 *.dll
+*.res
 *.dSYM

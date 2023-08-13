@@ -2,12 +2,16 @@
 CC = clang
 CFLAGS = -O3 -I ./snes -I ./zip
 
+WINDRES = windres
+
 execname = lakesnes
 sdlflags = `sdl2-config --cflags --libs`
 
 appname = LakeSnes.app
 appexecname = lakesnes_app
 appsdlflags = -framework SDL2 -F sdl2 -rpath @executable_path/../Frameworks
+
+winexecname = lakesnes.exe
 
 cfiles = snes/spc.c snes/dsp.c snes/apu.c snes/cpu.c snes/dma.c snes/ppu.c snes/cart.c snes/input.c snes/snes.c snes/snes_other.c \
  zip/zip.c tracing.c main.c
@@ -35,6 +39,10 @@ $(appname): $(appexecname)
 	cp resources/PkgInfo $(appname)/Contents/
 	cp resources/Info.plist $(appname)/Contents/
 
+$(winexecname): $(cfiles) $(hfiles)
+	$(WINDRES) resources/win.rc -O coff -o win.res
+	$(CC) $(CFLAGS) -o $@ $(cfiles) win.res $(sdlflags)
+
 clean:
-	rm -f $(execname) $(appexecname)
+	rm -f $(execname) $(appexecname) $(winexecname) win.res
 	rm -rf $(appname)

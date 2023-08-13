@@ -33,7 +33,7 @@
   <key>CFBundleIconFile</key>
   <string>appicon.icns</string>
   <key>CFBundleIdentifier</key>
-  <string>com.elzod.lakesnes</string>
+  <string>com.angelo.lakesnes</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
