@@ -6,7 +6,6 @@ on:
 
 jobs:
   build_linux:
-    if: false # temporary
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -29,7 +28,6 @@ jobs:
           path: lakesnes_linux.zip
   
   build_macos:
-    if: false # temporary
     runs-on: macos-latest
     steps:
       - name: Checkout repo
