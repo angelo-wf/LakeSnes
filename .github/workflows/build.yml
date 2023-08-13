@@ -38,7 +38,7 @@ jobs:
         with:
           repo: libsdl-org/SDL
           regex: true
-          file: SDL2-*.dmg
+          file: SDL2-.*\.dmg
       - name: Build
         run: |
           hdiutil attach -mountpoint sdl2 SDL2-*.dmg
