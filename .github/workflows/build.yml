@@ -1,0 +1,28 @@
+name: Build and release
+
+on:
+  push:
+    branches: [actions-test]
+
+jobs:
+  build_linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Install dependecies
+        run: |
+          sudo apt update -qy
+          sudo apt install -qy libsdl2-dev
+      - name: Build
+        run: make CC=gcc
+      - name: Create zip
+        uses: thedoctor0/zip-release@0.7.1
+        with:
+          filename: lakesnes_linux.zip
+          path: lakesnes LICENSE.txt
+      - name: Publsh artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: LakeSnes (Linux)
+          path: lakesnes_linux.zip
