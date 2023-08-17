@@ -30,7 +30,7 @@ void cart_free(Cart* cart) {
 }
 
 void cart_reset(Cart* cart) {
-  if(cart->ramSize > 0 && cart->ram != NULL) memset(cart->ram, 0, cart->ramSize); // for now
+  // do not reset ram, assumed to be battery backed
 }
 
 void cart_load(Cart* cart, int type, uint8_t* rom, int romSize, int ramSize) {
@@ -47,6 +47,20 @@ void cart_load(Cart* cart, int type, uint8_t* rom, int romSize, int ramSize) {
   }
   cart->ramSize = ramSize;
   memcpy(cart->rom, rom, romSize);
+}
+
+bool cart_handleBattery(Cart* cart, bool save, uint8_t* data, int* size) {
+  if(save) {
+    *size = cart->ramSize;
+    if(data == NULL) return true;
+    // assumes data is correct size
+    if(cart->ram != NULL) memcpy(data, cart->ram, cart->ramSize);
+    return true;
+  } else {
+    if(*size != cart->ramSize) return false;
+    if(cart->ram != NULL) memcpy(cart->ram, data, cart->ramSize);
+    return true;
+  }
 }
 
 uint8_t cart_read(Cart* cart, uint8_t bank, uint16_t adr) {

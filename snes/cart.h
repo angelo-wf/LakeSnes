@@ -24,7 +24,8 @@ struct Cart {
 Cart* cart_init(Snes* snes);
 void cart_free(Cart* cart);
 void cart_reset(Cart* cart); // will reset special chips etc, general reading is set up in load
-void cart_load(Cart* cart, int type, uint8_t* rom, int romSize, int ramSize); // TODO: figure out how to handle (battery, cart-chips etc)
+void cart_load(Cart* cart, int type, uint8_t* rom, int romSize, int ramSize); // loads rom, sets up ram buffer
+bool cart_handleBattery(Cart* cart, bool save, uint8_t* data, int* size); // saves/loads ram
 uint8_t cart_read(Cart* cart, uint8_t bank, uint16_t adr);
 void cart_write(Cart* cart, uint8_t bank, uint16_t adr, uint8_t val);
 

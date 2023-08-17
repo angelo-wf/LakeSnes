@@ -99,6 +99,11 @@ bool snes_loadRom(Snes* snes, const uint8_t* data, int length) {
   const char* typeNames[4] = {"(none)", "LoROM", "HiROM", "ExHiROM"};
   printf("Loaded %s rom (%s)\n", typeNames[headers[used].cartType], headers[used].pal ? "PAL" : "NTSC");
   printf("\"%s\"\n", headers[used].name);
+  int bankSize = used >= 2 ? 0x10000 : 0x8000; // 0, 1: LoROM, else HiROM
+  printf(
+    "%s banks: %d, ramsize: %d\n",
+    bankSize == 0x8000 ? "32K" : "64K", newLength / bankSize, headers[used].chips > 0 ? headers[used].ramSize : 0
+  );
   cart_load(
     snes->cart, headers[used].cartType,
     newData, newLength, headers[used].chips > 0 ? headers[used].ramSize : 0
@@ -135,6 +140,16 @@ void snes_setSamples(Snes* snes, int16_t* sampleData, int samplesPerFrame) {
   // size is 2 (int16) * 2 (stereo) * samplesPerFrame
   // sets samples in the sampleData
   dsp_getSamples(snes->apu->dsp, sampleData, samplesPerFrame);
+}
+
+int snes_saveBattery(Snes* snes, uint8_t* data) {
+  int size = 0;
+  cart_handleBattery(snes->cart, true, data, &size);
+  return size;
+}
+
+bool snes_loadBattery(Snes* snes, uint8_t* data, int size) {
+  return cart_handleBattery(snes->cart, false, data, &size);
 }
 
 static void readHeader(const uint8_t* data, int length, int location, CartHeader* header) {
