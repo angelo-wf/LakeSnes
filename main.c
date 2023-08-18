@@ -53,6 +53,7 @@ static struct {
   bool loaded;
   char* romName;
   char* savePath;
+  char* statePath;
 } glb = {};
 
 static uint8_t* readFile(const char* name, int* length);
@@ -121,6 +122,7 @@ int main(int argc, char** argv) {
   glb.loaded = false;
   glb.romName = NULL;
   glb.savePath = NULL;
+  glb.statePath = NULL;
   if(argc >= 2) {
     loadRom(argv[1]);
   } else {
@@ -183,6 +185,38 @@ int main(int argc, char** argv) {
               char line[57];
               getProcessorStateSpc(glb.snes, line);
               puts(line);
+              break;
+            }
+            case SDLK_m: {
+              // save state
+              int size = snes_saveState(glb.snes, NULL);
+              uint8_t* stateData = malloc(size);
+              snes_saveState(glb.snes, stateData);
+              FILE* f = fopen(glb.statePath, "wb");
+              if(f != NULL) {
+                fwrite(stateData, size, 1, f);
+                fclose(f);
+                puts("Saved state");
+              } else {
+                puts("Failed to save state");
+              }
+              free(stateData);
+              break;
+            }
+            case SDLK_n: {
+              // load state
+              int size = 0;
+              uint8_t* stateData = readFile(glb.statePath, &size);
+              if(stateData != NULL) {
+                if(snes_loadState(glb.snes, stateData, size)) {
+                  puts("Loaded state");
+                } else {
+                  puts("Failed to load state, file contents invalid");
+                }
+                free(stateData);
+              } else {
+                puts("Failed to load state, failed to read file");
+              }
               break;
             }
             case SDLK_RETURN: {
@@ -254,6 +288,7 @@ int main(int argc, char** argv) {
   SDL_free(glb.prefPath);
   if(glb.romName) free(glb.romName);
   if(glb.savePath) free(glb.savePath);
+  if(glb.statePath) free(glb.statePath);
   SDL_DestroyTexture(glb.texture);
   SDL_DestroyRenderer(glb.renderer);
   SDL_DestroyWindow(glb.window);
@@ -403,6 +438,12 @@ static void setPaths(const char* path) {
   strcpy(glb.savePath, glb.prefPath);
   strcat(glb.savePath, glb.romName);
   strcat(glb.savePath, ".srm");
+  // get state name
+  if(glb.statePath) free(glb.statePath);
+  glb.statePath = malloc(strlen(glb.prefPath) + strlen(glb.romName) + 5); // ".lss" (4) + '\0'
+  strcpy(glb.statePath, glb.prefPath);
+  strcat(glb.statePath, glb.romName);
+  strcat(glb.statePath, ".lss");
 }
 
 static void setTitle(const char* romName) {

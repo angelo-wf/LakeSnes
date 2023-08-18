@@ -8,6 +8,7 @@
 typedef struct Input Input;
 
 #include "snes.h"
+#include "statehandler.h"
 
 struct Input {
   Snes* snes;
@@ -22,6 +23,7 @@ struct Input {
 Input* input_init(Snes* snes);
 void input_free(Input* input);
 void input_reset(Input* input);
+void input_handleState(Input* input, StateHandler* sh);
 void input_latch(Input* input, bool value);
 uint8_t input_read(Input* input);
 

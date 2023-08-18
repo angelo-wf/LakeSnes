@@ -8,6 +8,7 @@
 typedef struct Ppu Ppu;
 
 #include "snes.h"
+#include "statehandler.h"
 
 typedef struct BgLayer {
   uint16_t hScroll;
@@ -131,6 +132,7 @@ struct Ppu {
 Ppu* ppu_init(Snes* snes);
 void ppu_free(Ppu* ppu);
 void ppu_reset(Ppu* ppu);
+void ppu_handleState(Ppu* ppu, StateHandler* sh);
 bool ppu_checkOverscan(Ppu* ppu);
 void ppu_handleVblank(Ppu* ppu);
 void ppu_handleFrameStart(Ppu* ppu);

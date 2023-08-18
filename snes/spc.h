@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "statehandler.h"
+
 typedef uint8_t (*SpcReadHandler)(void* mem, uint16_t adr);
 typedef void (*SpcWriteHandler)(void* mem, uint16_t adr, uint8_t val);
 typedef void (*SpcIdleHandler)(void* mem, bool waiting);
@@ -41,6 +43,7 @@ struct Spc {
 Spc* spc_init(void* mem, SpcReadHandler read, SpcWriteHandler write, SpcIdleHandler idle);
 void spc_free(Spc* spc);
 void spc_reset(Spc* spc, bool hard);
+void spc_handleState(Spc* spc, StateHandler* sh);
 void spc_runOpcode(Spc* spc);
 
 #endif

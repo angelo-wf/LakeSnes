@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "statehandler.h"
+
 typedef uint8_t (*CpuReadHandler)(void* mem, uint32_t adr);
 typedef void (*CpuWriteHandler)(void* mem, uint32_t adr, uint8_t val);
 typedef void (*CpuIdleHandler)(void* mem, bool waiting);
@@ -49,6 +51,7 @@ struct Cpu {
 Cpu* cpu_init(void* mem, CpuReadHandler read, CpuWriteHandler write, CpuIdleHandler idle);
 void cpu_free(Cpu* cpu);
 void cpu_reset(Cpu* cpu, bool hard);
+void cpu_handleState(Cpu* cpu, StateHandler* sh);
 void cpu_runOpcode(Cpu* cpu);
 void cpu_nmi(Cpu* cpu);
 void cpu_setIrq(Cpu* cpu, bool state);

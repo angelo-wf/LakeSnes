@@ -9,6 +9,7 @@
 #include "snes.h"
 #include "spc.h"
 #include "dsp.h"
+#include "statehandler.h"
 
 static const uint8_t bootRom[0x40] = {
   0xcd, 0xef, 0xbd, 0xe8, 0x00, 0xc6, 0x1d, 0xd0, 0xfc, 0x8f, 0xaa, 0xf4, 0x8f, 0xbb, 0xf5, 0x78,
@@ -50,6 +51,23 @@ void apu_reset(Apu* apu) {
     apu->timer[i].counter = 0;
     apu->timer[i].enabled = false;
   }
+}
+
+void apu_handleState(Apu* apu, StateHandler* sh) {
+  sh_handleBools(sh, &apu->romReadable, NULL);
+  sh_handleBytes(sh,
+    &apu->dspAdr, &apu->inPorts[0], &apu->inPorts[1], &apu->inPorts[2], &apu->inPorts[3], &apu->inPorts[4],
+    &apu->inPorts[5], &apu->outPorts[0], &apu->outPorts[1], &apu->outPorts[2], &apu->outPorts[3], NULL
+  );
+  sh_handleInts(sh, &apu->cycles, NULL);
+  for(int i = 0; i < 3; i++) {
+    sh_handleBools(sh, &apu->timer[i].enabled, NULL);
+    sh_handleBytes(sh, &apu->timer[i].cycles, &apu->timer[i].divider, &apu->timer[i].target, &apu->timer[i].counter, NULL);
+  }
+  sh_handleByteArray(sh, apu->ram, 0x10000);
+  // components
+  spc_handleState(apu->spc, sh);
+  dsp_handleState(apu->dsp, sh);
 }
 
 int apu_runCycles(Apu* apu, int wantedCycles) {

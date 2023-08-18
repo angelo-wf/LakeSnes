@@ -9,6 +9,9 @@
 #include "cart.h"
 #include "ppu.h"
 #include "dsp.h"
+#include "statehandler.h"
+
+static const int stateVersion = 1;
 
 typedef struct CartHeader {
   // normal header
@@ -150,6 +153,38 @@ int snes_saveBattery(Snes* snes, uint8_t* data) {
 
 bool snes_loadBattery(Snes* snes, uint8_t* data, int size) {
   return cart_handleBattery(snes->cart, false, data, &size);
+}
+
+int snes_saveState(Snes* snes, uint8_t* data) {
+  StateHandler* sh = sh_init(true, NULL, 0);
+  uint32_t id = 0x4653534c; // 'LSSF' LakeSnes State File
+  uint32_t version = stateVersion;
+  sh_handleInts(sh, &id, &version, &version, NULL); // second version to be overridden by length
+  cart_handleTypeState(snes->cart, sh);
+  // save data
+  snes_handleState(snes, sh);
+  // store
+  sh_placeInt(sh, 8, sh->offset);
+  if(data != NULL) memcpy(data, sh->data, sh->offset);
+  int size = sh->offset;
+  sh_free(sh);
+  return size;
+}
+
+bool snes_loadState(Snes* snes, uint8_t* data, int size) {
+  StateHandler* sh = sh_init(false, data, size);
+  uint32_t id = 0, version = 0, length = 0;
+  sh_handleInts(sh, &id, &version, &length, NULL);
+  bool cartMatch = cart_handleTypeState(snes->cart, sh);
+  if(id != 0x4653534c || version != stateVersion || length != size || !cartMatch) {
+    sh_free(sh);
+    return false;
+  }
+  // load data
+  snes_handleState(snes, sh);
+  // finish
+  sh_free(sh);
+  return true;
 }
 
 static void readHeader(const uint8_t* data, int length, int location, CartHeader* header) {

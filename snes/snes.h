@@ -13,6 +13,7 @@ typedef struct Snes Snes;
 #include "ppu.h"
 #include "cart.h"
 #include "input.h"
+#include "statehandler.h"
 
 struct Snes {
   Cpu* cpu;
@@ -63,6 +64,7 @@ struct Snes {
 Snes* snes_init(void);
 void snes_free(Snes* snes);
 void snes_reset(Snes* snes, bool hard);
+void snes_handleState(Snes* snes, StateHandler* sh);
 void snes_runFrame(Snes* snes);
 // used by dma, cpu
 void snes_runCycles(Snes* snes, int cycles);
@@ -86,5 +88,7 @@ void snes_setPixels(Snes* snes, uint8_t* pixelData);
 void snes_setSamples(Snes* snes, int16_t* sampleData, int samplesPerFrame);
 int snes_saveBattery(Snes* snes, uint8_t* data);
 bool snes_loadBattery(Snes* snes, uint8_t* data, int size);
+int snes_saveState(Snes* snes, uint8_t* data);
+bool snes_loadState(Snes* snes, uint8_t* data, int size);
 
 #endif

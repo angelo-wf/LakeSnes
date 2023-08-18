@@ -8,6 +8,7 @@
 typedef struct Dma Dma;
 
 #include "snes.h"
+#include "statehandler.h"
 
 typedef struct DmaChannel {
   uint8_t bAdr;
@@ -41,6 +42,7 @@ struct Dma {
 Dma* dma_init(Snes* snes);
 void dma_free(Dma* dma);
 void dma_reset(Dma* dma);
+void dma_handleState(Dma* dma, StateHandler* sh);
 uint8_t dma_read(Dma* dma, uint16_t adr); // 43x0-43xf
 void dma_write(Dma* dma, uint16_t adr, uint8_t val); // 43x0-43xf
 void dma_handleDma(Dma* dma, int cpuCycles);

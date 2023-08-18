@@ -13,6 +13,7 @@
 #include "ppu.h"
 #include "cart.h"
 #include "input.h"
+#include "statehandler.h"
 
 static const double apuCyclesPerMaster = (32040 * 32) / (1364 * 262 * 60.0);
 static const double apuCyclesPerMasterPal = (32040 * 32) / (1364 * 312 * 50.0);
@@ -84,6 +85,30 @@ void snes_reset(Snes* snes, bool hard) {
   snes->divideResult = 0x101;
   snes->fastMem = false;
   snes->openBus = 0;
+}
+
+void snes_handleState(Snes* snes, StateHandler* sh) {
+  sh_handleBools(sh,
+    &snes->palTiming, &snes->hIrqEnabled, &snes->vIrqEnabled, &snes->nmiEnabled, &snes->inNmi, &snes->irqCondition,
+    &snes->inIrq, &snes->inVblank, &snes->autoJoyRead, &snes->ppuLatch, &snes->fastMem, NULL
+  );
+  sh_handleBytes(sh, &snes->multiplyA, &snes->openBus, NULL);
+  sh_handleWords(sh,
+    &snes->hPos, &snes->vPos, &snes->hTimer, &snes->vTimer,
+    &snes->portAutoRead[0], &snes->portAutoRead[1], &snes->portAutoRead[2], &snes->portAutoRead[3],
+    &snes->autoJoyTimer, &snes->multiplyResult, &snes->divideA, &snes->divideResult, NULL
+  );
+  sh_handleInts(sh, &snes->ramAdr, &snes->frames, &snes->cycles, &snes->syncCycle, NULL);
+  sh_handleDoubles(sh, &snes->apuCatchupCycles, NULL);
+  sh_handleByteArray(sh, snes->ram, 0x20000);
+  // components
+  cpu_handleState(snes->cpu, sh);
+  dma_handleState(snes->dma, sh);
+  ppu_handleState(snes->ppu, sh);
+  apu_handleState(snes->apu, sh);
+  input_handleState(snes->input1, sh);
+  input_handleState(snes->input2, sh);
+  cart_handleState(snes->cart, sh);
 }
 
 void snes_runFrame(Snes* snes) {

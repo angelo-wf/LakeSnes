@@ -7,6 +7,7 @@
 
 #include "dma.h"
 #include "snes.h"
+#include "statehandler.h"
 
 static const int bAdrOffsets[8][4] = {
   {0, 0, 0, 0},
@@ -63,6 +64,23 @@ void dma_reset(Dma* dma) {
   dma->dmaState = 0;
   dma->hdmaInitRequested = false;
   dma->hdmaRunRequested = false;
+}
+
+void dma_handleState(Dma* dma, StateHandler* sh) {
+  sh_handleBools(sh, &dma->hdmaInitRequested, &dma->hdmaRunRequested, NULL);
+  sh_handleBytes(sh, &dma->dmaState, NULL);
+  for(int i = 0; i < 8; i++) {
+    sh_handleBools(sh,
+      &dma->channel[i].dmaActive, &dma->channel[i].hdmaActive, &dma->channel[i].fixed, &dma->channel[i].decrement,
+      &dma->channel[i].indirect, &dma->channel[i].fromB, &dma->channel[i].unusedBit, &dma->channel[i].doTransfer,
+      &dma->channel[i].terminated, NULL
+    );
+    sh_handleBytes(sh,
+      &dma->channel[i].bAdr, &dma->channel[i].aBank, &dma->channel[i].indBank, &dma->channel[i].repCount,
+      &dma->channel[i].unusedByte, &dma->channel[i].mode, NULL
+    );
+    sh_handleWords(sh, &dma->channel[i].aAdr, &dma->channel[i].size, &dma->channel[i].tableAdr, NULL);
+  }
 }
 
 uint8_t dma_read(Dma* dma, uint16_t adr) {
