@@ -8,6 +8,7 @@
 typedef struct Dsp Dsp;
 
 #include "apu.h"
+#include "statehandler.h"
 
 typedef struct DspChannel {
   // pitch
@@ -87,6 +88,7 @@ struct Dsp {
 Dsp* dsp_init(Apu* apu);
 void dsp_free(Dsp* dsp);
 void dsp_reset(Dsp* dsp);
+void dsp_handleState(Dsp* dsp, StateHandler* sh);
 void dsp_cycle(Dsp* dsp);
 uint8_t dsp_read(Dsp* dsp, uint8_t adr);
 void dsp_write(Dsp* dsp, uint8_t adr, uint8_t val);

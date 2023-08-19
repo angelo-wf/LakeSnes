@@ -7,6 +7,7 @@
 
 #include "input.h"
 #include "snes.h"
+#include "statehandler.h"
 
 Input* input_init(Snes* snes) {
   Input* input = malloc(sizeof(Input));
@@ -25,6 +26,13 @@ void input_free(Input* input) {
 void input_reset(Input* input) {
   input->latchLine = false;
   input->latchedState = 0;
+}
+
+void input_handleState(Input* input, StateHandler* sh) {
+  // TODO: handle types (switch type on state load?)
+  sh_handleBytes(sh, &input->type, NULL);
+  sh_handleBools(sh, &input->latchLine, NULL);
+  sh_handleWords(sh, &input->currentState, &input->latchedState, NULL);
 }
 
 void input_latch(Input* input, bool value) {

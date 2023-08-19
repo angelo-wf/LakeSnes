@@ -7,6 +7,7 @@
 
 #include "dsp.h"
 #include "apu.h"
+#include "statehandler.h"
 
 static const int rateValues[32] = {
   0, 2048, 1536, 1280, 1024, 768, 640, 512,
@@ -134,6 +135,51 @@ void dsp_reset(Dsp* dsp) {
   memset(dsp->firBufferR, 0, sizeof(dsp->firBufferR));
   memset(dsp->sampleBuffer, 0, sizeof(dsp->sampleBuffer));
   dsp->sampleOffset = 0;
+}
+
+void dsp_handleState(Dsp* dsp, StateHandler* sh) {
+  sh_handleBools(sh, &dsp->evenCycle, &dsp->mute, &dsp->reset, &dsp->echoWrites, NULL);
+  sh_handleBytes(sh, &dsp->noiseRate, &dsp->firBufferIndex, NULL);
+  sh_handleBytesS(sh,
+    &dsp->masterVolumeL, &dsp->masterVolumeR, &dsp->echoVolumeL, &dsp->echoVolumeR, &dsp->feedbackVolume,
+    &dsp->firValues[0], &dsp->firValues[1], &dsp->firValues[2], &dsp->firValues[3], &dsp->firValues[4],
+    &dsp->firValues[5], &dsp->firValues[6], &dsp->firValues[7], NULL
+  );
+  sh_handleWords(sh,
+    &dsp->counter, &dsp->dirPage, &dsp->echoBufferAdr, &dsp->echoDelay, &dsp->echoLength, &dsp->echoBufferIndex, NULL
+  );
+  sh_handleWordsS(sh,
+    &dsp->sampleOutL, &dsp->sampleOutR, &dsp->echoOutL, &dsp->echoOutR, &dsp->noiseSample,
+    &dsp->firBufferL[0], &dsp->firBufferL[1], &dsp->firBufferL[2], &dsp->firBufferL[3], &dsp->firBufferL[4],
+    &dsp->firBufferL[5], &dsp->firBufferL[6], &dsp->firBufferL[7], &dsp->firBufferR[0], &dsp->firBufferR[1],
+    &dsp->firBufferR[2], &dsp->firBufferR[3], &dsp->firBufferR[4], &dsp->firBufferR[5], &dsp->firBufferR[6],
+    &dsp->firBufferR[7], NULL
+  );
+  for(int i = 0; i < 8; i++) {
+    sh_handleBools(sh,
+      &dsp->channel[i].pitchModulation, &dsp->channel[i].useNoise, &dsp->channel[i].useGain, &dsp->channel[i].directGain,
+      &dsp->channel[i].keyOn, &dsp->channel[i].keyOff, &dsp->channel[i].echoEnable, NULL
+    );
+    sh_handleBytes(sh,
+      &dsp->channel[i].bufferOffset, &dsp->channel[i].srcn, &dsp->channel[i].blockOffset, &dsp->channel[i].brrHeader,
+      &dsp->channel[i].startDelay, &dsp->channel[i].adsrRates[0], &dsp->channel[i].adsrRates[1],
+      &dsp->channel[i].adsrRates[2], &dsp->channel[i].adsrRates[3], &dsp->channel[i].adsrState,
+      &dsp->channel[i].sustainLevel, &dsp->channel[i].gainSustainLevel, &dsp->channel[i].gainMode, NULL
+    );
+    sh_handleBytesS(sh, &dsp->channel[i].volumeL, &dsp->channel[i].volumeR, NULL);
+    sh_handleWords(sh,
+      &dsp->channel[i].pitch, &dsp->channel[i].pitchCounter, &dsp->channel[i].decodeOffset, &dsp->channel[i].gainValue,
+      &dsp->channel[i].preclampGain, &dsp->channel[i].gain, NULL
+    );
+    sh_handleWordsS(sh,
+      &dsp->channel[i].decodeBuffer[0], &dsp->channel[i].decodeBuffer[1], &dsp->channel[i].decodeBuffer[2],
+      &dsp->channel[i].decodeBuffer[3], &dsp->channel[i].decodeBuffer[4], &dsp->channel[i].decodeBuffer[5],
+      &dsp->channel[i].decodeBuffer[6], &dsp->channel[i].decodeBuffer[7], &dsp->channel[i].decodeBuffer[8],
+      &dsp->channel[i].decodeBuffer[9], &dsp->channel[i].decodeBuffer[10], &dsp->channel[i].decodeBuffer[11],
+      &dsp->channel[i].sampleOut, NULL
+    );
+  }
+  sh_handleByteArray(sh, dsp->ram, 0x80);
 }
 
 void dsp_cycle(Dsp* dsp) {

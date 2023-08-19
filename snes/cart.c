@@ -7,6 +7,7 @@
 
 #include "cart.h"
 #include "snes.h"
+#include "statehandler.h"
 
 static uint8_t cart_readLorom(Cart* cart, uint8_t bank, uint16_t adr);
 static void cart_writeLorom(Cart* cart, uint8_t bank, uint16_t adr, uint8_t val);
@@ -30,7 +31,27 @@ void cart_free(Cart* cart) {
 }
 
 void cart_reset(Cart* cart) {
-  if(cart->ramSize > 0 && cart->ram != NULL) memset(cart->ram, 0, cart->ramSize); // for now
+  // do not reset ram, assumed to be battery backed
+}
+
+bool cart_handleTypeState(Cart* cart, StateHandler* sh) {
+  // when loading, return if values match
+  if(sh->saving) {
+    sh_handleBytes(sh, &cart->type, NULL);
+    sh_handleInts(sh, &cart->romSize, &cart->ramSize, NULL);
+    return true;
+  } else {
+    uint8_t type = 0;
+    uint32_t romSize = 0;
+    uint32_t ramSize = 0;
+    sh_handleBytes(sh, &type, NULL);
+    sh_handleInts(sh, &romSize, &ramSize, NULL);
+    return !(type != cart->type || romSize != cart->romSize || ramSize != cart->ramSize);
+  }
+}
+
+void cart_handleState(Cart* cart, StateHandler* sh) {
+  if(cart->ram != NULL) sh_handleByteArray(sh, cart->ram, cart->ramSize);
 }
 
 void cart_load(Cart* cart, int type, uint8_t* rom, int romSize, int ramSize) {
@@ -47,6 +68,20 @@ void cart_load(Cart* cart, int type, uint8_t* rom, int romSize, int ramSize) {
   }
   cart->ramSize = ramSize;
   memcpy(cart->rom, rom, romSize);
+}
+
+bool cart_handleBattery(Cart* cart, bool save, uint8_t* data, int* size) {
+  if(save) {
+    *size = cart->ramSize;
+    if(data == NULL) return true;
+    // assumes data is correct size
+    if(cart->ram != NULL) memcpy(data, cart->ram, cart->ramSize);
+    return true;
+  } else {
+    if(*size != cart->ramSize) return false;
+    if(cart->ram != NULL) memcpy(cart->ram, data, cart->ramSize);
+    return true;
+  }
 }
 
 uint8_t cart_read(Cart* cart, uint8_t bank, uint16_t adr) {

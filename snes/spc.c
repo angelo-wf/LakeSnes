@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #include "spc.h"
+#include "statehandler.h"
 
 static uint8_t spc_read(Spc* spc, uint16_t adr);
 static void spc_write(Spc* spc, uint16_t adr, uint8_t val);
@@ -58,6 +59,15 @@ void spc_reset(Spc* spc, bool hard) {
   }
   spc->stopped = false;
   spc->resetWanted = true;
+}
+
+void spc_handleState(Spc* spc, StateHandler* sh) {
+  sh_handleBools(sh,
+    &spc->c, &spc->z, &spc->v, &spc->n, &spc->i, &spc->h, &spc->p, &spc->b, &spc->stopped,
+    &spc->resetWanted, NULL
+  );
+  sh_handleBytes(sh, &spc->a, &spc->x, &spc->y, &spc->sp, NULL);
+  sh_handleWords(sh, &spc->pc, NULL);
 }
 
 void spc_runOpcode(Spc* spc) {

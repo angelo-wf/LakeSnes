@@ -7,6 +7,7 @@
 
 #include "ppu.h"
 #include "snes.h"
+#include "statehandler.h"
 
 // array for layer definitions per mode:
 //   0-7: mode 0-7; 8: mode 1 + l3prio; 9: mode 7 + extbg
@@ -177,6 +178,62 @@ void ppu_reset(Ppu* ppu) {
   ppu->ppu1openBus = 0;
   ppu->ppu2openBus = 0;
   memset(ppu->pixelBuffer, 0, sizeof(ppu->pixelBuffer));
+}
+
+void ppu_handleState(Ppu* ppu, StateHandler* sh) {
+  sh_handleBools(sh,
+    &ppu->vramIncrementOnHigh, &ppu->cgramSecondWrite, &ppu->oamInHigh, &ppu->oamInHighWritten, &ppu->oamSecondWrite,
+    &ppu->objPriority, &ppu->timeOver, &ppu->rangeOver, &ppu->objInterlace, &ppu->m7largeField, &ppu->m7charFill,
+    &ppu->m7xFlip, &ppu->m7yFlip, &ppu->m7extBg, &ppu->addSubscreen, &ppu->subtractColor, &ppu->halfColor,
+    &ppu->mathEnabled[0], &ppu->mathEnabled[1], &ppu->mathEnabled[2], &ppu->mathEnabled[3], &ppu->mathEnabled[4],
+    &ppu->mathEnabled[5], &ppu->forcedBlank, &ppu->bg3priority, &ppu->evenFrame, &ppu->pseudoHires, &ppu->overscan,
+    &ppu->frameOverscan, &ppu->interlace, &ppu->frameInterlace, &ppu->directColor, &ppu->hCountSecond, &ppu->vCountSecond,
+    &ppu->countersLatched, NULL
+  );
+  sh_handleBytes(sh,
+    &ppu->vramRemapMode, &ppu->cgramPointer, &ppu->cgramBuffer, &ppu->oamAdr, &ppu->oamAdrWritten, &ppu->oamBuffer,
+    &ppu->objSize, &ppu->scrollPrev, &ppu->scrollPrev2, &ppu->mosaicSize, &ppu->mosaicStartLine, &ppu->m7prev,
+    &ppu->window1left, &ppu->window1right, &ppu->window2left, &ppu->window2right, &ppu->clipMode, &ppu->preventMathMode,
+    &ppu->fixedColorR, &ppu->fixedColorG, &ppu->fixedColorB, &ppu->brightness, &ppu->mode,
+    &ppu->ppu1openBus, &ppu->ppu2openBus, NULL
+  );
+  sh_handleWords(sh,
+    &ppu->vramPointer, &ppu->vramIncrement, &ppu->vramReadBuffer, &ppu->objTileAdr1, &ppu->objTileAdr2,
+    &ppu->hCount, &ppu->vCount, NULL
+  );
+  sh_handleWordsS(sh,
+    &ppu->m7matrix[0], &ppu->m7matrix[1], &ppu->m7matrix[2], &ppu->m7matrix[3], &ppu->m7matrix[4], &ppu->m7matrix[5],
+    &ppu->m7matrix[6], &ppu->m7matrix[7], NULL
+  );
+  sh_handleIntsS(sh, &ppu->m7startX, &ppu->m7startY, NULL);
+  for(int i = 0; i < 4; i++) {
+    sh_handleBools(sh,
+      &ppu->bgLayer[i].tilemapWider, &ppu->bgLayer[i].tilemapHigher, &ppu->bgLayer[i].bigTiles,
+      &ppu->bgLayer[i].mosaicEnabled, NULL
+    );
+    sh_handleWords(sh,
+      &ppu->bgLayer[i].hScroll, &ppu->bgLayer[i].vScroll, &ppu->bgLayer[i].tilemapAdr, &ppu->bgLayer[i].tileAdr, NULL
+    );
+  }
+  for(int i = 0; i < 5; i++) {
+    sh_handleBools(sh,
+      &ppu->layer[i].mainScreenEnabled, &ppu->layer[i].subScreenEnabled, &ppu->layer[i].mainScreenWindowed,
+      &ppu->layer[i].subScreenWindowed, NULL
+    );
+  }
+  for(int i = 0; i < 6; i++) {
+    sh_handleBools(sh,
+      &ppu->windowLayer[i].window1enabled, &ppu->windowLayer[i].window1inversed, &ppu->windowLayer[i].window2enabled,
+      &ppu->windowLayer[i].window2inversed, NULL
+    );
+    sh_handleBytes(sh, &ppu->windowLayer[i].maskLogic, NULL);
+  }
+  sh_handleWordArray(sh, ppu->vram, 0x8000);
+  sh_handleWordArray(sh, ppu->cgram, 0x100);
+  sh_handleWordArray(sh, ppu->oam, 0x100);
+  sh_handleByteArray(sh, ppu->highOam, 0x20);
+  sh_handleByteArray(sh, ppu->objPixelBuffer, 256);
+  sh_handleByteArray(sh, ppu->objPriorityBuffer, 256);
 }
 
 bool ppu_checkOverscan(Ppu* ppu) {

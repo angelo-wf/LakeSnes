@@ -79,10 +79,12 @@ Additionally, the following command are available:
 | E   | Hard reset        |
 | P   | Pause             |
 | O   | Frame advance     |
-| T   | Turbo             |
+| T   | Turbo (hold)      |
 | L   | Run one CPU cycle |
 | K   | Run one SPC cycle |
 | J   | Dumps some data   |
+| M   | Make save state   |
+| N   | Load save state   |
 
 Alt+Enter can be used to toggle fullscreen mode.
 
@@ -91,14 +93,17 @@ K does the same, but for the SPC instead (note that this acts as additional SPC 
 
 J currently dumps the 128K WRAM, 64K VRAM, 512B CGRAM, 544B OAM and 64K ARAM to a file called `dump.bin`.
 
-Save states and battery saving are not supported yet, but are planned.
+Battery saves, save states and `dump.bin` are stored in the SDL-provided preference directory, this is usually in `~/Library/Application Support/LakeSnes` on macOS, `~/.local/share/LakeSnes` on Linux and `%USERPROFILE%\AppData\Roaming\LakeSnes` on Windows.
+Battery saves and save states are currently named after the roms full name (including extension) with `.srm` or `.lss` appended respectively.
+
+Note that the save state format and exact naming and location for battery saves and save states is still being worked on and subject to change. Further updates will likely break compatibility with older save states and battery saves might need to be moved around and/or renamed.
 
 Minimizing or hiding the window can cause high CPU usage as this can cause v-sync to stop working.
 
 ## Compatibility
 
-The emulator currently only supports regular LoROM and HiROM games (no co-processors and such).
-Battery saves are not retained yet. SPC files can also not be loaded yet.
+The emulator currently only supports regular LoROM, HiROM and ExHiROM games (no co-processors and such).
+SPC files can not be loaded yet, but are planned.
 
 This emulator is definitely not fully accurate. The PPU renders per scanline, so mid-scanline effects are not supported. The DSP executes on a per-sample basis. The SPC and CPU-side timing should be cycle-accurate now, but the exact timing of certain event is still somewhat off. Communication between the CPU and SPC is also not cycle-accurate.
 

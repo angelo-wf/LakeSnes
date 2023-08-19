@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #include "cpu.h"
+#include "statehandler.h"
 
 static uint8_t cpu_read(Cpu* cpu, uint32_t adr);
 static void cpu_write(Cpu* cpu, uint32_t adr, uint8_t val);
@@ -68,6 +69,15 @@ void cpu_reset(Cpu* cpu, bool hard) {
   cpu->nmiWanted = false;
   cpu->intWanted = false;
   cpu->resetWanted = true;
+}
+
+void cpu_handleState(Cpu* cpu, StateHandler* sh) {
+  sh_handleBools(sh,
+    &cpu->c, &cpu->z, &cpu->v, &cpu->n, &cpu->i, &cpu->d, &cpu->xf, &cpu->mf, &cpu->e, &cpu->waiting, &cpu->stopped,
+    &cpu->irqWanted, &cpu->nmiWanted, &cpu->intWanted, &cpu->resetWanted, NULL
+  );
+  sh_handleBytes(sh, &cpu->k, &cpu->db, NULL);
+  sh_handleWords(sh, &cpu->a, &cpu->x, &cpu->y, &cpu->sp, &cpu->pc, &cpu->dp, NULL);
 }
 
 void cpu_runOpcode(Cpu* cpu) {
