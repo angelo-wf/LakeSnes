@@ -97,6 +97,8 @@ J currently dumps the 128K WRAM, 64K VRAM, 512B CGRAM, 544B OAM and 64K ARAM to 
 Battery saves, save states and `dump.bin` are stored in the SDL-provided preference directory, this is usually in `~/Library/Application Support/LakeSnes` on macOS, `~/.local/share/LakeSnes` on Linux and `%USERPROFILE%\AppData\Roaming\LakeSnes` on Windows.
 Battery saves and save states are currently named after the roms full name (including extension) with `.srm` or `.lss` appended respectively.
 
+Note that the save state format and exact naming and location for battery saves and save states is still being worked on and subject to change. Further updates will likely break compatibility with older save states and battery saves might need to be moved around and/or renamed.
+
 Minimizing or hiding the window can cause high CPU usage as this can cause v-sync to stop working.
 
 ## Compatibility
