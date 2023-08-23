@@ -86,7 +86,7 @@ jobs:
     needs: [build_linux, build_macos, build_windows]
     steps:
       - name: Fetch artifacts
-        uses: actions/download_artifact@v3
+        uses: actions/download-artifact@v3
       - name: Create nightly release
         uses: andelf/nightly-release@v1
         env:
