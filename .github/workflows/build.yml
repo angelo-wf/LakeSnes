@@ -1,0 +1,105 @@
+name: Build and release
+
+on:
+  push:
+    branches: [actions-test]
+
+jobs:
+  build_linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Install dependecies
+        run: |
+          sudo apt-get update -qy
+          sudo apt-get install -qy libsdl2-dev
+      - name: Build
+        run: make CC=gcc
+      - name: Create zip
+        uses: thedoctor0/zip-release@0.7.1
+        with:
+          filename: lakesnes_linux.zip
+          path: lakesnes LICENSE.txt
+      - name: Publish artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: LakeSnes_Linux
+          path: lakesnes_linux.zip
+  
+  build_macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Fetch SDL2 release dmg
+        uses: dsaltares/fetch-gh-release-asset@1.1.1
+        with:
+          repo: libsdl-org/SDL
+          regex: true
+          file: SDL2-.*\.dmg
+      - name: Build
+        run: |
+          hdiutil attach -mountpoint sdl2 SDL2-*.dmg
+          make LakeSnes.app
+          hdiutil detach sdl2
+      - name: Create zip
+        uses: thedoctor0/zip-release@0.7.1
+        with:
+          filename: lakesnes_macos.zip
+          path: LakeSnes.app LICENSE.txt
+      - name: Publish artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: LakeSnes_macOS
+          path: lakesnes_macos.zip
+  
+  build_windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: clang64
+          update: true
+          install: mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-make mingw-w64-clang-x86_64-SDL2
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          mingw32-make lakesnes.exe
+          cp /clang64/bin/SDL2.dll .
+      - name: Create zip
+        uses: thedoctor0/zip-release@0.7.1
+        with:
+          filename: lakesnes_windows.zip
+          path: lakesnes.exe SDL2.dll LICENSE.txt
+      - name: Publish artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: LakeSnes_Windows
+          path: lakesnes_windows.zip
+  
+  release:
+    runs-on: ubuntu-latest
+    needs: [build_linux, build_macos, build_windows]
+    steps:
+      - name: Fetch artifacts
+        uses: actions/download-artifact@v3
+      - name: Create nightly release
+        uses: andelf/nightly-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: nightly
+          name: LakeSnes nightly release
+          prerelease: true
+          body: |
+            LakeSnes nightly release (build ${{ github.run_number }}).
+
+            All builds are compiled for x86_64 (64-bit Intel).
+            The Linux build depends on SDL2 being installed with the package manager.
+            The macOS build is not signed nor notarized. To run, attempt to open it once (will not be allowed),
+            then use 'open' from the context menu and choose 'open anyway'.
+          files: ./LakeSnes_*/*.zip
