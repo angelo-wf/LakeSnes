@@ -9,6 +9,14 @@ The intent is for the actual emulation itself to be split off into a library, wh
 
 Performance, although much better than my JS version, is still quite bad though, especially when compared to emulators like BSNES or SNES9X (it used around 80% of one core whereas SNES9X only used around 15%, on my old hardware).
 
+## Nightly releases
+
+Nightly builds can be downloaded [from the releases here](https://github.com/angelo-wf/LakeSnes/releases/tag/nightly).
+
+- The macOS build is an app-bundle (includes SDL2) but not signed and notarized, and does not have proper version information. These are currently Intel-only, although manually compiling for/on Apple Silicon (arm64) works without issues. It might not run on older macOS versions.
+- The Linux build depends on SDL2 being installed already and is an x86_64 (64-bit Intel) build.
+- The Windows build includes `SDL2.dll` and is a 64-bit (Intel) build.
+
 ## Compiling
 
 ### MacOS (plain executable)
