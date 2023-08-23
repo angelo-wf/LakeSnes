@@ -24,7 +24,7 @@ jobs:
       - name: Publish artifact
         uses: actions/upload-artifact@v3
         with:
-          name: LakeSnes (Linux)
+          name: LakeSnes_Linux
           path: lakesnes_linux.zip
   
   build_macos:
@@ -51,7 +51,7 @@ jobs:
       - name: Publish artifact
         uses: actions/upload-artifact@v3
         with:
-          name: LakeSnes (macOS)
+          name: LakeSnes_macOS
           path: lakesnes_macos.zip
   
   build_windows:
@@ -78,5 +78,28 @@ jobs:
       - name: Publish artifact
         uses: actions/upload-artifact@v3
         with:
-          name: LakeSnes (Windows)
+          name: LakeSnes_Windows
           path: lakesnes_windows.zip
+  
+  release:
+    runs-on: ubuntu-latest
+    needs: [build_linux, build_macos, build_windows]
+    steps:
+      - name: Fetch artifacts
+        uses: actions/download_artifact@v3
+      - name: Create nightly release
+        uses: andelf/nightly-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: nightly
+          name: LakeSnes nightly release
+          prerelease: true
+          body: |
+            LakeSnes nightly release (build ${{ github.run_number }}).
+
+            All builds are compiled for x86_64 (64-bit Intel).
+            The Linux build depends on SDL2 being installed with the package manager.
+            The macOS build is not signed nor notarized. To run, attempt to open it once (will not be allowed),
+            then use 'open' from the context menu and choose 'open anyway'.
+          files: ./LakeSnes_*/*.zip
