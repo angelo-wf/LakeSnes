@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include "strings.h"
+
 #ifdef SDL2SUBDIR
 #include "SDL2/SDL.h"
 #else
@@ -45,6 +49,7 @@ static struct {
   int16_t* audioBuffer;
   // paths
   char* prefPath;
+  char* pathSeparator;
   // snes, timing
   Snes* snes;
   float wantedFrames;
@@ -88,8 +93,25 @@ int main(int argc, char** argv) {
     printf("Failed to create texture: %s\n", SDL_GetError());
     return 1;
   }
-  // get pref path
+  // get pref path, create directories
   glb.prefPath = SDL_GetPrefPath("", "LakeSnes");
+  char* savePath = malloc(strlen(glb.prefPath) + 6); // "saves" (5) + '\0'
+  char* statePath = malloc(strlen(glb.prefPath) + 7); // "states" (6) + '\0'
+  strcpy(savePath, glb.prefPath);
+  strcat(savePath, "saves");
+  strcpy(statePath, glb.prefPath);
+  strcat(statePath, "states");
+#ifdef _WIN32
+  mkdir(savePath); // ignore mkdir error, this (should) mean that the directory already exists
+  mkdir(statePath);
+  glb.pathSeparator = "\\";
+#else
+  mkdir(savePath, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+  mkdir(statePath, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+  glb.pathSeparator = "/";
+#endif
+  free(savePath);
+  free(statePath);
   // set up audio
   glb.audioFrequency = 48000;
   SDL_AudioSpec want, have;
@@ -337,13 +359,10 @@ static bool checkExtention(const char* name, bool forZip) {
   int length = strlen(name);
   if(length < 4) return false;
   if(forZip) {
-    if(strcmp(name + length - 4, ".zip") == 0) return true;
-    if(strcmp(name + length - 4, ".ZIP") == 0) return true;
+    if(strcasecmp(name + length - 4, ".zip") == 0) return true;
   } else {
-    if(strcmp(name + length - 4, ".smc") == 0) return true;
-    if(strcmp(name + length - 4, ".SMC") == 0) return true;
-    if(strcmp(name + length - 4, ".sfc") == 0) return true;
-    if(strcmp(name + length - 4, ".SFC") == 0) return true;
+    if(strcasecmp(name + length - 4, ".smc") == 0) return true;
+    if(strcasecmp(name + length - 4, ".sfc") == 0) return true;
   }
   return false;
 }
@@ -432,17 +451,24 @@ static void setPaths(const char* path) {
   }
   glb.romName = malloc(strlen(filename) + 1); // +1 for '\0'
   strcpy(glb.romName, filename);
+  // get extension length
+  const char* extStart = strrchr(glb.romName, '.'); // last occurence of '.'
+  int extLen = extStart == NULL ? 0 : strlen(extStart);
   // get save name
   if(glb.savePath) free(glb.savePath);
-  glb.savePath = malloc(strlen(glb.prefPath) + strlen(glb.romName) + 5); // ".srm" (4) + '\0'
+  glb.savePath = malloc(strlen(glb.prefPath) + strlen(glb.romName) + 11); // "saves/" (6) + ".srm" (4) + '\0'
   strcpy(glb.savePath, glb.prefPath);
-  strcat(glb.savePath, glb.romName);
+  strcat(glb.savePath, "saves");
+  strcat(glb.savePath, glb.pathSeparator);
+  strncat(glb.savePath, glb.romName, strlen(glb.romName) - extLen); // cut off extension
   strcat(glb.savePath, ".srm");
   // get state name
   if(glb.statePath) free(glb.statePath);
-  glb.statePath = malloc(strlen(glb.prefPath) + strlen(glb.romName) + 5); // ".lss" (4) + '\0'
+  glb.statePath = malloc(strlen(glb.prefPath) + strlen(glb.romName) + 12); // "states/" (7) + ".lss" (4) + '\0'
   strcpy(glb.statePath, glb.prefPath);
-  strcat(glb.statePath, glb.romName);
+  strcat(glb.statePath, "states");
+  strcat(glb.statePath, glb.pathSeparator);
+  strncat(glb.statePath, glb.romName, strlen(glb.romName) - extLen); // cut off extension
   strcat(glb.statePath, ".lss");
 }
 
