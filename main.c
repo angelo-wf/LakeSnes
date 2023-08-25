@@ -443,11 +443,11 @@ static void closeRom() {
 static void setPaths(const char* path) {
   // get rom name
   if(glb.romName) free(glb.romName);
-  const char* filename = strrchr(path, '/'); // get last occurence of '/'
+  const char* filename = strrchr(path, glb.pathSeparator[0]); // get last occurence of '/' or '\'
   if(filename == NULL) {
     filename = path;
   } else {
-    filename += 1; // skip past '/' itself
+    filename += 1; // skip past '/' or '\' itself
   }
   glb.romName = malloc(strlen(filename) + 1); // +1 for '\0'
   strcpy(glb.romName, filename);
