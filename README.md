@@ -15,7 +15,7 @@ Nightly builds can be downloaded [from the releases here](https://github.com/ang
 
 - The macOS build is an app-bundle (includes SDL2) but not signed and notarized, and does not have proper version information. These are currently Intel-only, although manually compiling for/on Apple Silicon (arm64) works without issues. It might not run on older macOS versions.
 - The Linux build depends on SDL2 being installed already and is an x86_64 (64-bit Intel) build.
-- The Windows build includes `SDL2.dll` and is a 64-bit (Intel) build. It opens a CMD-window as well to show log output.
+- The Windows build includes `SDL2.dll` and is a 64-bit (Intel) build.
 
 ## Compiling
 

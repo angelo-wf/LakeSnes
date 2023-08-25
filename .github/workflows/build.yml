@@ -101,6 +101,7 @@ jobs:
             All builds are compiled for x86_64 (64-bit Intel).
             The macOS build is not signed nor notarized. To run, attempt to open it once (will not be allowed), then use 'open' from the context menu and choose 'open anyway'.
             The Linux build depends on SDL2 being installed with the package manager.
+            The Windows build seems to sometimes trigger Windows Defender, this can make downloading/running it difficult.
 
-            The source downloads are out of date and should not be used.
+            The source downloads can sometimes be out of date and should not be used.
           files: ./LakeSnes_*/*.zip

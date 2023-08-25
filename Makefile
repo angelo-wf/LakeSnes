@@ -41,7 +41,7 @@ $(appname): $(appexecname)
 
 $(winexecname): $(cfiles) $(hfiles)
 	$(WINDRES) resources/win.rc -O coff -o win.res
-	$(CC) $(CFLAGS) -o $@ $(cfiles) win.res $(sdlflags) -mconsole
+	$(CC) $(CFLAGS) -o $@ $(cfiles) win.res $(sdlflags)
 
 clean:
 	rm -f $(execname) $(appexecname) $(winexecname) win.res
