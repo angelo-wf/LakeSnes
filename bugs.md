@@ -18,6 +18,8 @@ Generally, at least the following general issues seem at play:
   - Audio freezes after pressing start (SPC stuck in upload loop), game freezes at following SPC upload
 - Death Brade
   - Match ends instantly
+- Firepower 2000
+  - Garbage line on title screen background
 - Hiouden - Mamono-tachi to no Chikai
   - gets stuck on SPC upload on message after after Wolfteam-intro
 - Hook

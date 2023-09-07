@@ -11,7 +11,11 @@
 #include "dsp.h"
 #include "statehandler.h"
 
-static const int stateVersion = 1;
+static const int stateVersion = 2;
+/*
+1: initial version
+2: change snes->cycles/syncCycle to uint64
+*/
 
 typedef struct CartHeader {
   // normal header
