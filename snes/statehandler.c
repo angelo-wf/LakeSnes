@@ -165,6 +165,24 @@ void sh_handleIntsS(StateHandler* sh, ...) {
   va_end(args);
 }
 
+void sh_handleLongLongs(StateHandler* sh, ...) {
+  va_list args;
+  va_start(args, sh);
+  while(true) {
+    uint64_t* v = va_arg(args, uint64_t*);
+    if(v == NULL) break;
+    if(sh->saving) {
+      uint64_t val = *v;
+      for(int i = 0; i < 64; i += 8) sh_writeByte(sh, (val >> i) & 0xff);
+    } else {
+      uint64_t val = 0;
+      for(int i = 0; i < 64; i += 8) val |= sh_readByte(sh) << i;
+      *v = val;
+    }
+  }
+  va_end(args);
+}
+
 void sh_handleFloats(StateHandler* sh, ...) {
   va_list args;
   va_start(args, sh);

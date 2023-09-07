@@ -22,6 +22,7 @@ void sh_handleWords(StateHandler* sh, ...);
 void sh_handleWordsS(StateHandler* sh, ...);
 void sh_handleInts(StateHandler* sh, ...);
 void sh_handleIntsS(StateHandler* sh, ...);
+void sh_handleLongLongs(StateHandler* sh, ...);
 void sh_handleFloats(StateHandler* sh, ...);
 void sh_handleDoubles(StateHandler* sh, ...);
 void sh_handleByteArray(StateHandler* sh, uint8_t* data, int size);

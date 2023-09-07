@@ -98,7 +98,8 @@ void snes_handleState(Snes* snes, StateHandler* sh) {
     &snes->portAutoRead[0], &snes->portAutoRead[1], &snes->portAutoRead[2], &snes->portAutoRead[3],
     &snes->autoJoyTimer, &snes->multiplyResult, &snes->divideA, &snes->divideResult, NULL
   );
-  sh_handleInts(sh, &snes->ramAdr, &snes->frames, &snes->cycles, &snes->syncCycle, NULL);
+  sh_handleInts(sh, &snes->ramAdr, &snes->frames, NULL);
+  sh_handleLongLongs(sh, &snes->cycles, &snes->syncCycle, NULL);
   sh_handleDoubles(sh, &snes->apuCatchupCycles, NULL);
   sh_handleByteArray(sh, snes->ram, 0x20000);
   // components
