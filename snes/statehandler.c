@@ -176,7 +176,7 @@ void sh_handleLongLongs(StateHandler* sh, ...) {
       for(int i = 0; i < 64; i += 8) sh_writeByte(sh, (val >> i) & 0xff);
     } else {
       uint64_t val = 0;
-      for(int i = 0; i < 64; i += 8) val |= sh_readByte(sh) << i;
+      for(int i = 0; i < 64; i += 8) val |= (uint64_t)sh_readByte(sh) << i;
       *v = val;
     }
   }
