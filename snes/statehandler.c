@@ -217,10 +217,10 @@ void sh_handleDoubles(StateHandler* sh, ...) {
       uint64_t val = *((uint64_t*) valData);
       for(int i = 0; i < 64; i += 8) sh_writeByte(sh, (val >> i) & 0xff);
     } else {
-      uint32_t val = 0;
-      for(int i = 0; i < 64; i += 8) val |= sh_readByte(sh) << i;
+      uint64_t val = 0;
+      for(int i = 0; i < 64; i += 8) val |= (uint64_t)sh_readByte(sh) << i;
       uint8_t valData[8] = {};
-      *((uint32_t*) valData) = val;
+      *((uint64_t*) valData) = val;
       *v = *((double*) valData);
     }
   }
