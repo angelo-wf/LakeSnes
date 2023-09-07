@@ -32,8 +32,8 @@ struct Snes {
   uint16_t hPos;
   uint16_t vPos;
   uint32_t frames;
-  uint32_t cycles;
-  uint32_t syncCycle;
+  uint64_t cycles;
+  uint64_t syncCycle;
   // cpu handling
   double apuCatchupCycles;
   // nmi / irq
