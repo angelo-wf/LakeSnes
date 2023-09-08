@@ -138,6 +138,11 @@ void snes_setButtonState(Snes* snes, int player, int button, bool pressed) {
   }
 }
 
+void snes_setPixelFormat(Snes* snes, int pixelFormat) {
+  // pixelFormatXRGB, pixelFormatRGBX (default: pixelFormatRGBX)
+  ppu_setPixelOutputFormat(snes->ppu, (pixelFormat) ? ppu_pixelOutputFormatBGRX : ppu_pixelOutputFormatXBGR);
+}
+
 void snes_setPixels(Snes* snes, uint8_t* pixelData) {
   // size is 4 (rgba) * 512 (w) * 480 (h)
   ppu_putPixels(snes->ppu, pixelData);
