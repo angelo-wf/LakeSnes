@@ -27,6 +27,8 @@ Cart* cart_init(Snes* snes) {
 }
 
 void cart_free(Cart* cart) {
+  if(cart->rom != NULL) free(cart->rom);
+  if(cart->ram != NULL) free(cart->ram);
   free(cart);
 }
 

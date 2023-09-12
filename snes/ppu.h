@@ -127,7 +127,10 @@ struct Ppu {
   // pixel buffer (xbgr)
   // times 2 for even and odd frame
   uint8_t pixelBuffer[512 * 4 * 239 * 2];
+  uint8_t pixelOutputFormat;
 };
+
+enum { ppu_pixelOutputFormatXBGR = 0, ppu_pixelOutputFormatBGRX = 1 };
 
 Ppu* ppu_init(Snes* snes);
 void ppu_free(Ppu* ppu);
@@ -140,5 +143,6 @@ void ppu_runLine(Ppu* ppu, int line);
 uint8_t ppu_read(Ppu* ppu, uint8_t adr);
 void ppu_write(Ppu* ppu, uint8_t adr, uint8_t val);
 void ppu_putPixels(Ppu* ppu, uint8_t* pixels);
+void ppu_setPixelOutputFormat(Ppu* ppu, int pixelOutputFormat);
 
 #endif

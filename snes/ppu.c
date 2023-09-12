@@ -75,6 +75,7 @@ static uint16_t ppu_getVramRemap(Ppu* ppu);
 Ppu* ppu_init(Snes* snes) {
   Ppu* ppu = malloc(sizeof(Ppu));
   ppu->snes = snes;
+  ppu_setPixelOutputFormat(ppu, ppu_pixelOutputFormatBGRX);
   return ppu;
 }
 
@@ -272,6 +273,10 @@ void ppu_runLine(Ppu* ppu, int line) {
   }
 }
 
+void ppu_setPixelOutputFormat(Ppu* ppu, int pixelOutputFormat) {
+  ppu->pixelOutputFormat = pixelOutputFormat;
+}
+
 static void ppu_handlePixel(Ppu* ppu, int x, int y) {
   int r = 0, r2 = 0;
   int g = 0, g2 = 0;
@@ -326,12 +331,12 @@ static void ppu_handlePixel(Ppu* ppu, int x, int y) {
     }
   }
   int row = (y - 1) + (ppu->evenFrame ? 0 : 239);
-  ppu->pixelBuffer[row * 2048 + x * 8 + 1] = ((b2 << 3) | (b2 >> 2)) * ppu->brightness / 15;
-  ppu->pixelBuffer[row * 2048 + x * 8 + 2] = ((g2 << 3) | (g2 >> 2)) * ppu->brightness / 15;
-  ppu->pixelBuffer[row * 2048 + x * 8 + 3] = ((r2 << 3) | (r2 >> 2)) * ppu->brightness / 15;
-  ppu->pixelBuffer[row * 2048 + x * 8 + 5] = ((b << 3) | (b >> 2)) * ppu->brightness / 15;
-  ppu->pixelBuffer[row * 2048 + x * 8 + 6] = ((g << 3) | (g >> 2)) * ppu->brightness / 15;
-  ppu->pixelBuffer[row * 2048 + x * 8 + 7] = ((r << 3) | (r >> 2)) * ppu->brightness / 15;
+  ppu->pixelBuffer[row * 2048 + x * 8 + 0 + ppu->pixelOutputFormat] = ((b2 << 3) | (b2 >> 2)) * ppu->brightness / 15;
+  ppu->pixelBuffer[row * 2048 + x * 8 + 1 + ppu->pixelOutputFormat] = ((g2 << 3) | (g2 >> 2)) * ppu->brightness / 15;
+  ppu->pixelBuffer[row * 2048 + x * 8 + 2 + ppu->pixelOutputFormat] = ((r2 << 3) | (r2 >> 2)) * ppu->brightness / 15;
+  ppu->pixelBuffer[row * 2048 + x * 8 + 4 + ppu->pixelOutputFormat] = ((b << 3) | (b >> 2)) * ppu->brightness / 15;
+  ppu->pixelBuffer[row * 2048 + x * 8 + 5 + ppu->pixelOutputFormat] = ((g << 3) | (g >> 2)) * ppu->brightness / 15;
+  ppu->pixelBuffer[row * 2048 + x * 8 + 6 + ppu->pixelOutputFormat] = ((r << 3) | (r >> 2)) * ppu->brightness / 15;
 }
 
 static int ppu_getPixel(Ppu* ppu, int x, int y, bool sub, int* r, int* g, int* b) {
