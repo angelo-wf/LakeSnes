@@ -523,10 +523,13 @@ void snes_cpuIdle(void* mem, bool waiting) {
 
 uint8_t snes_cpuRead(void* mem, uint32_t adr) {
   Snes* snes = (Snes*) mem;
-  int cycles = snes_getAccessTime(snes, adr);
+  int cycles = snes_getAccessTime(snes, adr) - 4;
   dma_handleDma(snes->dma, cycles);
   snes_runCycles(snes, cycles);
-  return snes_read(snes, adr);
+  uint8_t rv = snes_read(snes, adr);
+  dma_handleDma(snes->dma, 4);
+  snes_runCycles(snes, 4);
+  return rv;
 }
 
 void snes_cpuWrite(void* mem, uint32_t adr, uint8_t val) {

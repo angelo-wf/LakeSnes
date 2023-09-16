@@ -59,6 +59,7 @@ void spc_reset(Spc* spc, bool hard) {
   }
   spc->stopped = false;
   spc->resetWanted = true;
+  spc->step = 0;
 }
 
 void spc_handleState(Spc* spc, StateHandler* sh) {
@@ -66,9 +67,15 @@ void spc_handleState(Spc* spc, StateHandler* sh) {
     &spc->c, &spc->z, &spc->v, &spc->n, &spc->i, &spc->h, &spc->p, &spc->b, &spc->stopped,
     &spc->resetWanted, NULL
   );
-  sh_handleBytes(sh, &spc->a, &spc->x, &spc->y, &spc->sp, NULL);
-  sh_handleWords(sh, &spc->pc, NULL);
+  sh_handleBytes(sh, &spc->a, &spc->x, &spc->y, &spc->sp, &spc->opcode, &spc->dat, &spc->param, NULL);
+  sh_handleWords(sh, &spc->pc, &spc->adr, &spc->adr1, &spc->dat16, NULL);
+  sh_handleInts(sh, &spc->step, &spc->bstep, NULL);
 }
+
+// all 2-cycle and select opcodes run in single-cycle mode
+// everything else runs per-opcode.  Actraiser 2, Rendering Ranger B2, and
+// a handful of other games have very tight timing constraints while
+// processing uploads from the main cpu.  -dink sept 15, 2023
 
 void spc_runOpcode(Spc* spc) {
   if(spc->resetWanted) {
@@ -88,8 +95,14 @@ void spc_runOpcode(Spc* spc) {
     spc_idleWait(spc);
     return;
   }
-  uint8_t opcode = spc_readOpcode(spc);
-  spc_doOpcode(spc, opcode);
+  if (spc->step == 0) {
+    spc->bstep = 0;
+	spc->opcode = spc_readOpcode(spc);
+	spc->step = 1;
+	return;
+  }
+  spc_doOpcode(spc, spc->opcode);
+  if (spc->step == 1) spc->step = 0; // reset step for non cycle-stepped opcodes.
 }
 
 static uint8_t spc_read(Spc* spc, uint16_t adr) {
@@ -194,6 +207,13 @@ static uint16_t spc_adrAbs(Spc* spc) {
   return spc_readOpcodeWord(spc);
 }
 
+static void spc_adrAbs_stepped(Spc* spc) {
+  switch (spc->bstep++) {
+    case 0: spc->adr =   spc_readOpcode(spc); break;
+    case 1: spc->adr |= (spc_readOpcode(spc) << 8); spc->bstep = 0; break;
+  }
+}
+
 static uint16_t spc_adrInd(Spc* spc) {
   spc_read(spc, spc->pc);
   return spc->x | (spc->p << 8);
@@ -203,6 +223,15 @@ static uint16_t spc_adrIdx(Spc* spc) {
   uint8_t pointer = spc_readOpcode(spc);
   spc_idle(spc);
   return spc_readWord(spc, ((pointer + spc->x) & 0xff) | (spc->p << 8), ((pointer + spc->x + 1) & 0xff) | (spc->p << 8));
+}
+
+static void spc_adrIdx_stepped(Spc* spc) {
+  switch (spc->bstep++) {
+    case 0: spc->param = spc_readOpcode(spc); break;
+    case 1: spc_idle(spc); break;
+    case 2: break;
+    case 3: spc->adr = spc_readWord(spc, ((spc->param + spc->x) & 0xff) | (spc->p << 8), ((spc->param + spc->x + 1) & 0xff) | (spc->p << 8)); spc->bstep = 0; break;
+  }
 }
 
 static uint16_t spc_adrImm(Spc* spc) {
@@ -215,10 +244,27 @@ static uint16_t spc_adrDpx(Spc* spc) {
   return res;
 }
 
+static void spc_adrDpx_stepped(Spc* spc) {
+  switch (spc->bstep++) {
+    case 0: spc->adr = spc_readOpcode(spc); break;
+    case 1: spc_idle(spc); spc->adr = ((spc->adr + spc->x) & 0xff) | (spc->p << 8); spc->bstep = 0; break;
+  }
+}
+
+#if 0
+// deprecated/unused!
 static uint16_t spc_adrDpy(Spc* spc) {
   uint16_t res = ((spc_readOpcode(spc) + spc->y) & 0xff) | (spc->p << 8);
   spc_idle(spc);
   return res;
+}
+#endif
+
+static void spc_adrDpy_stepped(Spc* spc) {
+  switch (spc->bstep++) {
+    case 0: spc->adr = spc_readOpcode(spc); break;
+    case 1: spc_idle(spc); spc->adr = ((spc->adr + spc->y) & 0xff) | (spc->p << 8); spc->bstep = 0; break;
+  }
 }
 
 static uint16_t spc_adrAbx(Spc* spc) {
@@ -227,10 +273,26 @@ static uint16_t spc_adrAbx(Spc* spc) {
   return res;
 }
 
+static void spc_adrAbx_stepped(Spc* spc) {
+  switch (spc->bstep++) {
+    case 0: spc->adr = spc_readOpcode(spc); break;
+    case 1: spc->adr |= (spc_readOpcode(spc) << 8); break;
+    case 2: spc_idle(spc); spc->adr = (spc->adr + spc->x) & 0xffff; spc->bstep = 0; break;
+  }
+}
+
 static uint16_t spc_adrAby(Spc* spc) {
   uint16_t res = (spc_readOpcodeWord(spc) + spc->y) & 0xffff;
   spc_idle(spc);
   return res;
+}
+
+static void spc_adrAby_stepped(Spc* spc) {
+  switch (spc->bstep++) {
+    case 0: spc->adr = spc_readOpcode(spc); break;
+    case 1: spc->adr |= (spc_readOpcode(spc) << 8); break;
+    case 2: spc_idle(spc); spc->adr = (spc->adr + spc->y) & 0xffff; spc->bstep = 0; break;
+  }
 }
 
 static uint16_t spc_adrIdy(Spc* spc) {
@@ -240,9 +302,26 @@ static uint16_t spc_adrIdy(Spc* spc) {
   return (adr + spc->y) & 0xffff;
 }
 
+static void spc_adrIdy_stepped(Spc* spc) {
+  switch (spc->bstep++) {
+    case 0: spc->dat = spc_readOpcode(spc); break;
+    case 1: spc->adr = spc_read(spc, spc->dat | (spc->p << 8)); break;
+    case 2: spc->adr |= (spc_read(spc, ((spc->dat + 1) & 0xff) | (spc->p << 8)) << 8); break;
+    case 3: spc_idle(spc); spc->adr = (spc->adr + spc->y) & 0xffff; spc->bstep = 0; break;
+  }
+}
+
 static uint16_t spc_adrDpDp(Spc* spc, uint8_t* srcVal) {
   *srcVal = spc_read(spc, spc_readOpcode(spc) | (spc->p << 8));
   return spc_readOpcode(spc) | (spc->p << 8);
+}
+
+static void spc_adrDpDp_stepped(Spc* spc) {
+  switch (spc->bstep++) {
+    case 0: spc->dat = spc_readOpcode(spc); break;
+    case 1: spc->dat = spc_read(spc, spc->dat | (spc->p << 8)); break;
+    case 2: spc->adr = spc_readOpcode(spc) | (spc->p << 8); spc->bstep = 0; break;
+  }
 }
 
 static uint16_t spc_adrDpImm(Spc* spc, uint8_t* srcVal) {
@@ -260,6 +339,13 @@ static uint8_t spc_adrAbsBit(Spc* spc, uint16_t* adr) {
   uint16_t adrBit = spc_readOpcodeWord(spc);
   *adr = adrBit & 0x1fff;
   return adrBit >> 13;
+}
+
+static void spc_adrAbsBit_stepped(Spc* spc) {
+  switch (spc->bstep++) {
+    case 0: spc->adr = spc_readOpcode(spc); break;
+    case 1: spc->adr |= (spc_readOpcode(spc) << 8); spc->dat = spc->adr >> 13; spc->adr &= 0x1fff; spc->bstep = 0; break;
+  }
 }
 
 static uint16_t spc_adrDpWord(Spc* spc, uint16_t* low) {
@@ -394,18 +480,24 @@ static void spc_movy(Spc* spc, uint16_t adr) {
 }
 
 static void spc_movs(Spc* spc, uint16_t adr) {
-  spc_read(spc, adr);
-  spc_write(spc, adr, spc->a);
+  switch (spc->bstep++) {
+    case 0: spc_read(spc, adr); break;
+    case 1: spc_write(spc, adr, spc->a); spc->bstep = 0; break;
+  }
 }
 
 static void spc_movsx(Spc* spc, uint16_t adr) {
-  spc_read(spc, adr);
-  spc_write(spc, adr, spc->x);
+  switch (spc->bstep++) {
+    case 0: spc_read(spc, adr); break;
+    case 1: spc_write(spc, adr, spc->x); spc->bstep = 0; break;
+  }
 }
 
 static void spc_movsy(Spc* spc, uint16_t adr) {
-  spc_read(spc, adr);
-  spc_write(spc, adr, spc->y);
+  switch (spc->bstep++) {
+    case 0: spc_read(spc, adr); break;
+    case 1: spc_write(spc, adr, spc->y); spc->bstep = 0; break;
+  }
 }
 
 static void spc_asl(Spc* spc, uint16_t adr) {
@@ -602,7 +694,12 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x10: { // bpl rel
-      spc_doBranch(spc, spc_readOpcode(spc), !spc->n);
+      switch (spc->step++) {
+        case 1: spc->dat = spc_readOpcode(spc); if (spc->n) spc->step = 0; break;
+        case 2: spc_idle(spc); break;
+        case 3: spc_idle(spc); spc->pc += (int8_t) spc->dat; spc->step = 0; break;
+      }
+	  //spc_doBranch(spc, spc_readOpcode(spc), !spc->n);
       break;
     }
     case 0x14: { // or  dpx
@@ -767,14 +864,18 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x3a: { // incw dp
-      uint16_t low = 0;
-      uint16_t high = spc_adrDpWord(spc, &low);
-      uint16_t value = spc_read(spc, low) + 1;
-      spc_write(spc, low, value & 0xff);
-      value += spc_read(spc, high) << 8;
-      spc_write(spc, high, value >> 8);
-      spc->z = value == 0;
-      spc->n = value & 0x8000;
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDpWord(spc, &spc->adr1); break;
+        case 2: spc->dat16 = spc_read(spc, spc->adr1) + 1; break;
+        case 3: spc_write(spc, spc->adr1, spc->dat16 & 0xff); break;
+        case 4: spc->dat16 += spc_read(spc, spc->adr) << 8; break;
+        case 5:
+          spc_write(spc, spc->adr, spc->dat16 >> 8);
+          spc->z = spc->dat16 == 0;
+          spc->n = spc->dat16 & 0x8000;
+          spc->step = 0;
+          break;
+      }
       break;
     }
     case 0x3b: { // rol dpx
@@ -796,7 +897,10 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x3e: { // cmpx dp
-      spc_cmpx(spc, spc_adrDp(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDp(spc); break;
+        case 2: spc_cmpx(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0x3f: { // call abs
@@ -970,9 +1074,13 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x69: { // cmpm dp, dp
-      uint8_t src = 0;
-      uint16_t dst = spc_adrDpDp(spc, &src);
-      spc_cmpm(spc, dst, src);
+      switch (spc->step++) {
+        case 1: spc_adrDpDp_stepped(spc); break;
+        case 2: spc_adrDpDp_stepped(spc); break;
+        case 3: spc_adrDpDp_stepped(spc); break;
+        case 4: spc->dat ^= 0xff; spc->dat16 = spc_read(spc, spc->adr) + spc->dat + 1; break;
+        case 5: spc->c = spc->dat16 > 0xff; spc_idle(spc); spc_setZN(spc, spc->dat16); spc->step = 0; break;
+      }
       break;
     }
     case 0x6a: { // and1n abs.bit
@@ -1076,7 +1184,10 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x7e: { // cmpy dp
-      spc_cmpy(spc, spc_adrDp(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDp(spc); break;
+        case 2: spc_cmpy(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0x7f: { // reti imp
@@ -1133,7 +1244,10 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x8d: { // movy imm
-      spc_movy(spc, spc_adrImm(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrImm(spc); break;
+        case 2: spc_movy(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0x8e: { // popp imp
@@ -1143,10 +1257,12 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0x8f: { // movm dp, imm
-      uint8_t val = 0;
-      uint16_t dst = spc_adrDpImm(spc, &val);
-      spc_read(spc, dst);
-      spc_write(spc, dst, val);
+      switch (spc->step++) {
+        case 1: spc->dat = spc_readOpcode(spc); break;
+        case 2: spc->adr = spc_readOpcode(spc) | (spc->p << 8); break;
+        case 3: spc_read(spc, spc->adr); break;
+        case 4: spc_write(spc, spc->adr, spc->dat); spc->step = 0; break;
+      }
       break;
     }
     case 0x90: { // bcc rel
@@ -1276,9 +1392,11 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xaa: { // mov1 abs.bit
-      uint16_t adr = 0;
-      uint8_t bit = spc_adrAbsBit(spc, &adr);
-      spc->c = (spc_read(spc, adr) >> bit) & 1;
+      switch (spc->step++) {
+        case 1: spc_adrAbsBit_stepped(spc); break;
+        case 2: spc_adrAbsBit_stepped(spc); break;
+        case 3: spc->c = (spc_read(spc, spc->adr) >> spc->dat) & 1; spc->step = 0; break;
+      }
       break;
     }
     case 0xab: { // inc dp
@@ -1300,13 +1418,20 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xaf: { // movs ind+
-      uint16_t adr = spc_adrIndP(spc);
-      spc_idle(spc);
-      spc_write(spc, adr, spc->a);
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrIndP(spc); break;
+        case 2: spc_idle(spc); break;
+        case 3: spc_write(spc, spc->adr, spc->a); spc->step = 0; break;
+      }
       break;
     }
     case 0xb0: { // bcs rel
-      spc_doBranch(spc, spc_readOpcode(spc), spc->c);
+      switch (spc->step++) {
+        case 1: spc->dat = spc_readOpcode(spc); if (!spc->c) spc->step = 0; break;
+        case 2: spc_idle(spc); break;
+        case 3: spc_idle(spc); spc->pc += (int8_t) spc->dat; spc->step = 0; break;
+      }
+      //spc_doBranch(spc, spc_readOpcode(spc), spc->c);
       break;
     }
     case 0xb4: { // sbc dpx
@@ -1338,15 +1463,19 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xba: { // movw dp
-      uint16_t low = 0;
-      uint16_t high = spc_adrDpWord(spc, &low);
-      uint8_t vall = spc_read(spc, low);
-      spc_idle(spc);
-      uint16_t val = vall | (spc_read(spc, high) << 8);
-      spc->a = val & 0xff;
-      spc->y = val >> 8;
-      spc->z = val == 0;
-      spc->n = val & 0x8000;
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDpWord(spc, &spc->adr1); break;
+        case 2: spc->dat = spc_read(spc, spc->adr1); break;
+        case 3: spc_idle(spc); break;
+        case 4:
+          spc->dat16 = spc->dat | (spc_read(spc, spc->adr) << 8);
+          spc->a = spc->dat16 & 0xff;
+          spc->y = spc->dat16 >> 8;
+          spc->z = spc->dat16 == 0;
+          spc->n = spc->dat16 & 0x8000;
+          spc->step = 0;
+          break;
+      }
       break;
     }
     case 0xbb: { // inc dpx
@@ -1378,10 +1507,11 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xbf: { // mov ind+
-      uint16_t adr = spc_adrIndP(spc);
-      spc->a = spc_read(spc, adr);
-      spc_idle(spc);
-      spc_setZN(spc, spc->a);
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrIndP(spc); break;
+        case 2: spc->a = spc_read(spc, spc->adr); break;
+        case 3: spc_idle(spc); spc_setZN(spc, spc->a); spc->step = 0; break;
+      }
       break;
     }
     case 0xc0: { // di  imp
@@ -1391,19 +1521,39 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xc4: { // movs dp
-      spc_movs(spc, spc_adrDp(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDp(spc); break;
+        case 2: spc_movs(spc, spc->adr); break;
+        case 3: spc_movs(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xc5: { // movs abs
-      spc_movs(spc, spc_adrAbs(spc));
+      switch (spc->step++) {
+        case 1: spc_adrAbs_stepped(spc); break;
+        case 2: spc_adrAbs_stepped(spc); break;
+        case 3: spc_movs(spc, spc->adr); break;
+        case 4: spc_movs(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xc6: { // movs ind
-      spc_movs(spc, spc_adrInd(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrInd(spc); break;
+        case 2: spc_movs(spc, spc->adr); break;
+        case 3: spc_movs(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xc7: { // movs idx
-      spc_movs(spc, spc_adrIdx(spc));
+      switch (spc->step++) {
+        case 1: spc_adrIdx_stepped(spc); break;
+        case 2: spc_adrIdx_stepped(spc); break;
+        case 3: spc_adrIdx_stepped(spc); break;
+        case 4: spc_adrIdx_stepped(spc); break;
+        case 5: spc_movs(spc, spc->adr); break;
+        case 6: spc_movs(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xc8: { // cmpx imm
@@ -1411,27 +1561,46 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xc9: { // movsx abs
-      spc_movsx(spc, spc_adrAbs(spc));
+      switch (spc->step++) {
+        case 1: spc_adrAbs_stepped(spc); break;
+        case 2: spc_adrAbs_stepped(spc); break;
+        case 3: spc_movsx(spc, spc->adr); break;
+        case 4: spc_movsx(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xca: { // mov1s abs.bit
-      uint16_t adr = 0;
-      uint8_t bit = spc_adrAbsBit(spc, &adr);
-      uint8_t result = (spc_read(spc, adr) & (~(1 << bit))) | (spc->c << bit);
-      spc_idle(spc);
-      spc_write(spc, adr, result);
+      switch (spc->step++) {
+        case 1: spc_adrAbsBit_stepped(spc); break;
+        case 2: spc_adrAbsBit_stepped(spc); break;
+        case 3: spc->dat = (spc_read(spc, spc->adr) & (~(1 << spc->dat))) | (spc->c << spc->dat); break;
+        case 4: spc_idle(spc); break;
+        case 5: spc_write(spc, spc->adr, spc->dat); spc->step = 0; break;
+      }
       break;
     }
     case 0xcb: { // movsy dp
-      spc_movsy(spc, spc_adrDp(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDp(spc); break;
+        case 2: spc_movsy(spc, spc->adr); break;
+        case 3: spc_movsy(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xcc: { // movsy abs
-      spc_movsy(spc, spc_adrAbs(spc));
+      switch (spc->step++) {
+        case 1: spc_adrAbs_stepped(spc); break;
+        case 2: spc_adrAbs_stepped(spc); break;
+        case 3: spc_movsy(spc, spc->adr); break;
+        case 4: spc_movsy(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xcd: { // movx imm
-      spc_movx(spc, spc_adrImm(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrImm(spc); break;
+        case 2: spc_movx(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xce: { // popx imp
@@ -1450,43 +1619,87 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xd0: { // bne rel
-      spc_doBranch(spc, spc_readOpcode(spc), !spc->z);
+      switch (spc->step++) {
+        case 1: spc->dat = spc_readOpcode(spc); if (spc->z) spc->step = 0; break;
+        case 2: spc_idle(spc); break;
+        case 3: spc_idle(spc); spc->pc += (int8_t) spc->dat; spc->step = 0; break;
+      }
+      //spc_doBranch(spc, spc_readOpcode(spc), !spc->z);
       break;
     }
     case 0xd4: { // movs dpx
-      spc_movs(spc, spc_adrDpx(spc));
+      switch (spc->step++) {
+        case 1: spc_adrDpx_stepped(spc); break;
+        case 2: spc_adrDpx_stepped(spc); break;
+        case 3: spc_movs(spc, spc->adr); break;
+        case 4: spc_movs(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xd5: { // movs abx
-      spc_movs(spc, spc_adrAbx(spc));
+      switch (spc->step++) {
+        case 1: spc_adrAbx_stepped(spc); break;
+        case 2: spc_adrAbx_stepped(spc); break;
+        case 3: spc_adrAbx_stepped(spc); break;
+        case 4: spc_movs(spc, spc->adr); break;
+        case 5: spc_movs(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xd6: { // movs aby
-      spc_movs(spc, spc_adrAby(spc));
+      switch (spc->step++) {
+        case 1: spc_adrAby_stepped(spc); break;
+        case 2: spc_adrAby_stepped(spc); break;
+        case 3: spc_adrAby_stepped(spc); break;
+        case 4: spc_movs(spc, spc->adr); break;
+        case 5: spc_movs(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xd7: { // movs idy
-      spc_movs(spc, spc_adrIdy(spc));
+      switch (spc->step++) {
+        case 1: spc_adrIdy_stepped(spc); break;
+        case 2: spc_adrIdy_stepped(spc); break;
+        case 3: spc_adrIdy_stepped(spc); break;
+        case 4: spc_adrIdy_stepped(spc); break;
+        case 5: spc_movs(spc, spc->adr); break;
+        case 6: spc_movs(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xd8: { // movsx dp
-      spc_movsx(spc, spc_adrDp(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDp(spc); break;
+        case 2: spc_movsx(spc, spc->adr); break;
+        case 3: spc_movsx(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xd9: { // movsx dpy
-      spc_movsx(spc, spc_adrDpy(spc));
+      switch (spc->step++) {
+        case 1: spc_adrDpy_stepped(spc); break;
+        case 2: spc_adrDpy_stepped(spc); break;
+        case 3: spc_movsx(spc, spc->adr); break;
+        case 4: spc_movsx(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xda: { // movws dp
-      uint16_t low = 0;
-      uint16_t high = spc_adrDpWord(spc, &low);
-      spc_read(spc, low);
-      spc_write(spc, low, spc->a);
-      spc_write(spc, high, spc->y);
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDpWord(spc, &spc->adr1); break;
+        case 2: spc_read(spc, spc->adr1); break;
+        case 3: spc_write(spc, spc->adr1, spc->a); break;
+        case 4: spc_write(spc, spc->adr, spc->y); spc->step = 0; break;
+      }
       break;
     }
     case 0xdb: { // movsy dpx
-      spc_movsy(spc, spc_adrDpx(spc));
+      switch (spc->step++) {
+        case 1: spc_adrDpx_stepped(spc); break;
+        case 2: spc_adrDpx_stepped(spc); break;
+        case 3: spc_movsy(spc, spc->adr); break;
+        case 4: spc_movsy(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xdc: { // decy imp
@@ -1528,27 +1741,50 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xe4: { // mov dp
-      spc_mov(spc, spc_adrDp(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDp(spc); break;
+        case 2: spc_mov(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xe5: { // mov abs
-      spc_mov(spc, spc_adrAbs(spc));
+      switch (spc->step++) {
+        case 1: spc_adrAbs_stepped(spc); break;
+        case 2: spc_adrAbs_stepped(spc); break;
+        case 3: spc_mov(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xe6: { // mov ind
-      spc_mov(spc, spc_adrInd(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrInd(spc); break;
+        case 2: spc_mov(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xe7: { // mov idx
-      spc_mov(spc, spc_adrIdx(spc));
+      switch (spc->step++) {
+        case 1: spc_adrIdx_stepped(spc); break;
+        case 2: spc_adrIdx_stepped(spc); break;
+        case 3: spc_adrIdx_stepped(spc); break;
+        case 4: spc_adrIdx_stepped(spc); break;
+        case 5: spc_mov(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xe8: { // mov imm
-      spc_mov(spc, spc_adrImm(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrImm(spc); break;
+        case 2: spc_mov(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xe9: { // movx abs
-      spc_movx(spc, spc_adrAbs(spc));
+      switch (spc->step++) {
+        case 1: spc_adrAbs_stepped(spc); break;
+        case 2: spc_adrAbs_stepped(spc); break;
+        case 3: spc_movx(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xea: { // not1 abs.bit
@@ -1559,13 +1795,20 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xeb: { // movy dp
-      spc_movy(spc, spc_adrDp(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDp(spc); break;
+        case 2: spc_movy(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xec: { // movy abs
-      spc_movy(spc, spc_adrAbs(spc));
+      switch (spc->step++) {
+        case 1: spc_adrAbs_stepped(spc); break;
+        case 2: spc_adrAbs_stepped(spc); break;
+        case 3: spc_movy(spc, spc->adr); spc->step = 0; break;
+      }
       break;
-    }
+   }
     case 0xed: { // notc imp
       spc_read(spc, spc->pc);
       spc_idle(spc);
@@ -1585,41 +1828,80 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xf0: { // beq rel
-      spc_doBranch(spc, spc_readOpcode(spc), spc->z);
+      switch (spc->step++) {
+        case 1: spc->dat = spc_readOpcode(spc); if (!spc->z) spc->step = 0; break;
+        case 2: spc_idle(spc); break;
+        case 3: spc_idle(spc); spc->pc += (int8_t) spc->dat; spc->step = 0; break;
+      }
+      //spc_doBranch(spc, spc_readOpcode(spc), spc->z);
       break;
     }
     case 0xf4: { // mov dpx
-      spc_mov(spc, spc_adrDpx(spc));
+      switch (spc->step++) {
+        case 1: spc_adrDpx_stepped(spc); break;
+        case 2: spc_adrDpx_stepped(spc); break;
+        case 3: spc_mov(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xf5: { // mov abx
-      spc_mov(spc, spc_adrAbx(spc));
+      switch (spc->step++) {
+        case 1: spc_adrAbx_stepped(spc); break;
+        case 2: spc_adrAbx_stepped(spc); break;
+        case 3: spc_adrAbx_stepped(spc); break;
+        case 4: spc_mov(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xf6: { // mov aby
-      spc_mov(spc, spc_adrAby(spc));
+      switch (spc->step++) {
+        case 1: spc_adrAby_stepped(spc); break;
+        case 2: spc_adrAby_stepped(spc); break;
+        case 3: spc_adrAby_stepped(spc); break;
+        case 4: spc_mov(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xf7: { // mov idy
-      spc_mov(spc, spc_adrIdy(spc));
+      switch (spc->step++) {
+        case 1: spc_adrIdy_stepped(spc); break;
+        case 2: spc_adrIdy_stepped(spc); break;
+        case 3: spc_adrIdy_stepped(spc); break;
+        case 4: spc_adrIdy_stepped(spc); break;
+        case 5: spc_mov(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xf8: { // movx dp
-      spc_movx(spc, spc_adrDp(spc));
+      switch (spc->step++) {
+        case 1: spc->adr = spc_adrDp(spc); break;
+        case 2: spc_movx(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xf9: { // movx dpy
-      spc_movx(spc, spc_adrDpy(spc));
+      switch (spc->step++) {
+        case 1: spc_adrDpy_stepped(spc); break;
+        case 2: spc_adrDpy_stepped(spc); break;
+        case 3: spc_movx(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xfa: { // movm dp, dp
-      uint8_t val = 0;
-      uint16_t dst = spc_adrDpDp(spc, &val);
-      spc_write(spc, dst, val);
+      switch (spc->step++) {
+        case 1: spc_adrDpDp_stepped(spc); break;
+        case 2: spc_adrDpDp_stepped(spc); break;
+        case 3: spc_adrDpDp_stepped(spc); break;
+        case 4: spc_write(spc, spc->adr, spc->dat); spc->step = 0; break;
+      }
       break;
     }
     case 0xfb: { // movy dpx
-      spc_movy(spc, spc_adrDpx(spc));
+      switch (spc->step++) {
+        case 1: spc_adrDpx_stepped(spc); break;
+        case 2: spc_adrDpx_stepped(spc); break;
+        case 3: spc_movy(spc, spc->adr); spc->step = 0; break;
+      }
       break;
     }
     case 0xfc: { // incy imp
@@ -1635,10 +1917,13 @@ static void spc_doOpcode(Spc* spc, uint8_t opcode) {
       break;
     }
     case 0xfe: { // dbnzy rel
-      spc_read(spc, spc->pc);
-      spc_idle(spc);
-      spc->y--;
-      spc_doBranch(spc, spc_readOpcode(spc), spc->y != 0);
+      switch (spc->step++) {
+        case 1: spc_read(spc, spc->pc); break;
+        case 2: spc_idle(spc); spc->y--; break;
+        case 3: spc->dat = spc_readOpcode(spc); if (!(spc->y != 0)) spc->step = 0; break;
+        case 4: spc_idle(spc); break;
+        case 5: spc_idle(spc); spc->pc += (int8_t) spc->dat; spc->step = 0; break;
+      }
       break;
     }
     case 0xff: { // stop imp
