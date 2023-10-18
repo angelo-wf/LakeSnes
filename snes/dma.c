@@ -206,6 +206,8 @@ static void dma_waitCycle(Dma* dma) {
 }
 
 static void dma_doDma(Dma* dma, int cpuCycles) {
+  // nmi/irq is delayed by 1 opcode if requested during dma/hdma
+  dma->snes->cpu->intDelay = true;
   // align to multiple of 8
   snes_syncCycles(dma->snes, true, 8);
   // full transfer overhead
@@ -245,6 +247,8 @@ static void dma_initHdma(Dma* dma, bool doSync, int cpuCycles) {
     dma->channel[i].terminated = false;
   }
   if(!hdmaEnabled) return;
+  // nmi/irq is delayed by 1 opcode if requested during dma/hdma
+  dma->snes->cpu->intDelay = true;
   if(doSync) snes_syncCycles(dma->snes, true, 8);
   // full transfer overhead
   snes_runCycles(dma->snes, 8);
@@ -280,6 +284,8 @@ static void dma_doHdma(Dma* dma, bool doSync, int cpuCycles) {
     }
   }
   if(!hdmaActive) return;
+  // nmi/irq is delayed by 1 opcode if requested during dma/hdma
+  dma->snes->cpu->intDelay = true;
   if(doSync) snes_syncCycles(dma->snes, true, 8);
   // full transfer overhead
   snes_runCycles(dma->snes, 8);

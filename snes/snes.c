@@ -366,7 +366,8 @@ static void snes_writeReg(Snes* snes, uint16_t adr, uint8_t val) {
       if(!snes->nmiEnabled && (val & 0x80) && snes->inNmi) {
         cpu_nmi(snes->cpu);
       }
-      snes->nmiEnabled = val & 0x80;
+	  snes->nmiEnabled = val & 0x80;
+      snes->cpu->intDelay = true; // nmi/irq is delayed by 1 opcode
       break;
     }
     case 0x4201: {

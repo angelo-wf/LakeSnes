@@ -45,6 +45,7 @@ struct Cpu {
   bool irqWanted;
   bool nmiWanted;
   bool intWanted;
+  bool intDelay;
   bool resetWanted;
 };
 
