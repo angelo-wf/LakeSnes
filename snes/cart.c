@@ -34,6 +34,7 @@ void cart_free(Cart* cart) {
 
 void cart_reset(Cart* cart) {
   // do not reset ram, assumed to be battery backed
+  (void)cart;
 }
 
 bool cart_handleTypeState(Cart* cart, StateHandler* sh) {
@@ -72,7 +73,7 @@ void cart_load(Cart* cart, int type, uint8_t* rom, int romSize, int ramSize) {
   memcpy(cart->rom, rom, romSize);
 }
 
-bool cart_handleBattery(Cart* cart, bool save, uint8_t* data, int* size) {
+bool cart_handleBattery(Cart* cart, bool save, uint8_t* data, size_t* size) {
   if(save) {
     *size = cart->ramSize;
     if(data == NULL) return true;

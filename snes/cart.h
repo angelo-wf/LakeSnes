@@ -28,7 +28,7 @@ void cart_reset(Cart* cart); // will reset special chips etc, general reading is
 bool cart_handleTypeState(Cart* cart, StateHandler* sh);
 void cart_handleState(Cart* cart, StateHandler* sh);
 void cart_load(Cart* cart, int type, uint8_t* rom, int romSize, int ramSize); // loads rom, sets up ram buffer
-bool cart_handleBattery(Cart* cart, bool save, uint8_t* data, int* size); // saves/loads ram
+bool cart_handleBattery(Cart* cart, bool save, uint8_t* data, size_t* size); // saves/loads ram
 uint8_t cart_read(Cart* cart, uint8_t bank, uint16_t adr);
 void cart_write(Cart* cart, uint8_t bank, uint16_t adr, uint8_t val);
 

@@ -89,9 +89,9 @@ void snes_setButtonState(Snes* snes, int player, int button, bool pressed);
 void snes_setPixelFormat(Snes* snes, int pixelFormat);
 void snes_setPixels(Snes* snes, uint8_t* pixelData);
 void snes_setSamples(Snes* snes, int16_t* sampleData, int samplesPerFrame);
-int snes_saveBattery(Snes* snes, uint8_t* data);
-bool snes_loadBattery(Snes* snes, uint8_t* data, int size);
-int snes_saveState(Snes* snes, uint8_t* data);
-bool snes_loadState(Snes* snes, uint8_t* data, int size);
+size_t snes_saveBattery(Snes* snes, uint8_t* data);
+bool snes_loadBattery(Snes* snes, uint8_t* data, size_t size);
+size_t snes_saveState(Snes* snes, uint8_t* data);
+bool snes_loadState(Snes* snes, uint8_t* data, size_t size);
 
 #endif

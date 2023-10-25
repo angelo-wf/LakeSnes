@@ -210,6 +210,7 @@ void apu_spcWrite(void* mem, uint16_t adr, uint8_t val) {
 }
 
 void apu_spcIdle(void* mem, bool waiting) {
+  (void)waiting;
   Apu* apu = (Apu*) mem;
   apu_cycle(apu);
 }

@@ -516,6 +516,7 @@ uint8_t snes_read(Snes* snes, uint32_t adr) {
 }
 
 void snes_cpuIdle(void* mem, bool waiting) {
+  (void)waiting;
   Snes* snes = (Snes*) mem;
   dma_handleDma(snes->dma, 6);
   snes_runCycles(snes, 6);

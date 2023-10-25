@@ -53,7 +53,7 @@ static struct {
   // snes, timing
   Snes* snes;
   float wantedFrames;
-  int wantedSamples;
+  uint32_t wantedSamples;
   // loaded rom
   bool loaded;
   char* romName;

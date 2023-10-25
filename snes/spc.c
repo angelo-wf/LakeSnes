@@ -23,7 +23,7 @@ static void spc_pushByte(Spc* spc, uint8_t value);
 static uint16_t spc_pullWord(Spc* spc);
 static void spc_pushWord(Spc* spc, uint16_t value);
 static uint16_t spc_readWord(Spc* spc, uint16_t adrl, uint16_t adrh);
-static void spc_writeWord(Spc* spc, uint16_t adrl, uint16_t adrh, uint16_t value);
+//static void spc_writeWord(Spc* spc, uint16_t adrl, uint16_t adrh, uint16_t value);
 static void spc_doOpcode(Spc* spc, uint8_t opcode);
 
 // addressing modes and opcode functions not declared, only used after defintions
@@ -179,10 +179,10 @@ static uint16_t spc_readWord(Spc* spc, uint16_t adrl, uint16_t adrh) {
   return value | (spc_read(spc, adrh) << 8);
 }
 
-static void spc_writeWord(Spc* spc, uint16_t adrl, uint16_t adrh, uint16_t value) {
+/*static void spc_writeWord(Spc* spc, uint16_t adrl, uint16_t adrh, uint16_t value) {
   spc_write(spc, adrl, value & 0xff);
   spc_write(spc, adrh, value >> 8);
-}
+}*/
 
 // adressing modes
 

@@ -154,17 +154,17 @@ void snes_setSamples(Snes* snes, int16_t* sampleData, int samplesPerFrame) {
   dsp_getSamples(snes->apu->dsp, sampleData, samplesPerFrame);
 }
 
-int snes_saveBattery(Snes* snes, uint8_t* data) {
-  int size = 0;
+size_t snes_saveBattery(Snes* snes, uint8_t* data) {
+  size_t size = 0;
   cart_handleBattery(snes->cart, true, data, &size);
   return size;
 }
 
-bool snes_loadBattery(Snes* snes, uint8_t* data, int size) {
+bool snes_loadBattery(Snes* snes, uint8_t* data, size_t size) {
   return cart_handleBattery(snes->cart, false, data, &size);
 }
 
-int snes_saveState(Snes* snes, uint8_t* data) {
+size_t snes_saveState(Snes* snes, uint8_t* data) {
   StateHandler* sh = sh_init(true, NULL, 0);
   uint32_t id = 0x4653534c; // 'LSSF' LakeSnes State File
   uint32_t version = stateVersion;
@@ -175,12 +175,12 @@ int snes_saveState(Snes* snes, uint8_t* data) {
   // store
   sh_placeInt(sh, 8, sh->offset);
   if(data != NULL) memcpy(data, sh->data, sh->offset);
-  int size = sh->offset;
+  size_t size = sh->offset;
   sh_free(sh);
   return size;
 }
 
-bool snes_loadState(Snes* snes, uint8_t* data, int size) {
+bool snes_loadState(Snes* snes, uint8_t* data, size_t size) {
   StateHandler* sh = sh_init(false, data, size);
   uint32_t id = 0, version = 0, length = 0;
   sh_handleInts(sh, &id, &version, &length, NULL);
