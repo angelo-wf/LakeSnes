@@ -1,6 +1,10 @@
 # LakeSnes
 A SNES emulator, in C
 
+## Notice
+
+I have decided to archive this repository. Some personal/mental issues mean that I don't really have the motivation to work on it further (or really, on emulation in general). There is a more active fork by [Dinkc64](https://github.com/dinkc64) over [here](https://github.com/dinkc64/LakeSnes), which already has a bunch of fixes, optimisations, as well as support for the CX4 expansion chip.
+
 ## About
 
 This is a SNES emulator, written in C, mostly as a followup on my [earlier Javascript version](https://github.com/angelo-wf/SnesJs). The main drive behind rewriting it in C was C's speed. The JS version could barely run at 20 FPS on my system, whereas this C version runs at full speed.
