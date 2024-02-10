@@ -38,6 +38,15 @@ struct Spc {
   bool stopped;
   // reset
   bool resetWanted;
+  // single-cycle
+  uint8_t opcode;
+  uint32_t step;
+  uint32_t bstep;
+  uint16_t adr;
+  uint16_t adr1;
+  uint8_t dat;
+  uint16_t dat16;
+  uint8_t param;
 };
 
 Spc* spc_init(void* mem, SpcReadHandler read, SpcWriteHandler write, SpcIdleHandler idle);
