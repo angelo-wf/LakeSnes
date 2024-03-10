@@ -68,13 +68,14 @@ void cpu_reset(Cpu* cpu, bool hard) {
   cpu->stopped = false;
   cpu->nmiWanted = false;
   cpu->intWanted = false;
+  cpu->intDelay = false;
   cpu->resetWanted = true;
 }
 
 void cpu_handleState(Cpu* cpu, StateHandler* sh) {
   sh_handleBools(sh,
     &cpu->c, &cpu->z, &cpu->v, &cpu->n, &cpu->i, &cpu->d, &cpu->xf, &cpu->mf, &cpu->e, &cpu->waiting, &cpu->stopped,
-    &cpu->irqWanted, &cpu->nmiWanted, &cpu->intWanted, &cpu->resetWanted, NULL
+    &cpu->irqWanted, &cpu->nmiWanted, &cpu->intWanted, &cpu->intDelay, &cpu->resetWanted, NULL
   );
   sh_handleBytes(sh, &cpu->k, &cpu->db, NULL);
   sh_handleWords(sh, &cpu->a, &cpu->x, &cpu->y, &cpu->sp, &cpu->pc, &cpu->dp, NULL);
@@ -122,6 +123,7 @@ void cpu_runOpcode(Cpu* cpu) {
     uint8_t opcode = cpu_readOpcode(cpu);
     cpu_doOpcode(cpu, opcode);
   }
+  cpu->intDelay = false;
 }
 
 void cpu_nmi(Cpu* cpu) {
@@ -149,7 +151,7 @@ static void cpu_idleWait(Cpu* cpu) {
 }
 
 static void cpu_checkInt(Cpu* cpu) {
-  cpu->intWanted = cpu->nmiWanted || (cpu->irqWanted && !cpu->i);
+  cpu->intWanted = (cpu->nmiWanted || (cpu->irqWanted && !cpu->i)) && !cpu->intDelay;
 }
 
 static uint8_t cpu_readOpcode(Cpu* cpu) {
